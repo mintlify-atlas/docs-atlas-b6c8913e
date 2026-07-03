@@ -1,7 +1,7 @@
 ---
-title: "WindowManager: The OS Kernel for Window Lifecycle"
+title: "WindowManager: The NEX OS Kernel for Window Lifecycle"
 sidebarTitle: "Window Manager"
-description: "How NEX OS WindowManagerContext manages window state, z-index layering, snap layouts, virtual desktops, and inter-window focus — the core kernel of the system."
+description: "How WindowManagerContext manages window state, z-index layering, snap layouts, virtual desktops, and inter-window focus in NEX OS."
 ---
 
 `WindowManagerContext` is the heart of NEX OS. It acts as the operating system kernel, owning the complete lifecycle of every application window: opening, closing, minimising, maximising, snapping, focusing, and restoring. Just as a traditional OS kernel arbitrates access to system resources, `WindowManagerContext` arbitrates the screen — deciding which window is on top, how much space it occupies, and which virtual desktop it belongs to. Every component that interacts with windows does so exclusively through the `useWindowManager()` hook; nothing writes directly to window state.
@@ -56,7 +56,7 @@ The `savedSize` field is particularly important: when a window is maximised, its
 
 Every application in NEX OS is wrapped in the `Window` component (`src/components/Window.tsx`), which acts as a Higher-Order Component providing all window-chrome behaviour. The app component itself — `Notepad`, `FileExplorer`, `Terminal`, etc. — has no knowledge of dragging, resizing, or snapping. It simply renders its UI; the `Window` HOC handles everything else.
 
-```
+```text
 Window (HOC)
 ├── Drag — mouse-down on window-header triggers position tracking
 ├── Resize — 8 resize handles (n, s, e, w, ne, nw, se, sw)

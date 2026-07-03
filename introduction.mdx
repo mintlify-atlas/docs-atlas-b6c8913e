@@ -1,5 +1,5 @@
 ---
-title: "NEX OS: A Full Desktop OS Running in Your Browser"
+title: "NEX OS: Browser-Based Desktop OS Built with React 19"
 sidebarTitle: "Introduction"
 description: "NEX OS is a browser-based operating system built with React 19, TypeScript, WASM, and Three.js — featuring 20+ apps, virtual file system, and neon themes."
 ---
@@ -75,7 +75,7 @@ NEX OS is assembled from a carefully chosen set of modern web technologies, each
 
 The entire application is rooted in a layered provider tree defined in `App.tsx`. Context providers are nested in a strict order so that inner providers can consume the state of outer ones.
 
-```
+```text
 App.tsx
 ├── SettingsProvider        ← User preferences (theme, volume, wallpaper…)
 │   └── MusicPlayerProvider

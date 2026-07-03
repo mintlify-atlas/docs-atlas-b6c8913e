@@ -1,7 +1,7 @@
 ---
-title: "Get Started with NEX OS in Under 5 Minutes"
+title: "NEX OS Quickstart: Clone, Install, and Run Locally"
 sidebarTitle: "Quickstart"
-description: "Clone, install, and run NEX OS locally with npm. Includes dev server setup, production build, and optional WASM compilation steps."
+description: "Clone, install, and run NEX OS locally with npm. Covers the Vite dev server, WASM compilation, production build, and common troubleshooting steps."
 ---
 
 This guide walks you through everything needed to get NEX OS running on your local machine — from cloning the repository to seeing the animated UEFI boot screen in your browser. The full installation takes under five minutes on a standard internet connection, and no special tooling beyond Node.js and npm is required to start developing.
@@ -120,6 +120,7 @@ The `build` script chains three steps automatically: `npm run build:as` (Assembl
 | `npm run build:as` | Compile `assembly/index.ts` → WASM only (skips TypeScript and Vite) |
 | `npm run preview` | Serve the `dist/` folder locally for production preview |
 | `npm run lint` | Run ESLint across all source files using the project's flat config |
+| `npm run music:server` | Start the Nex Music backend server (runs `npm run dev` inside `server/`) |
 
 ## Troubleshooting
 

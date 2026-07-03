@@ -1,5 +1,5 @@
 ---
-title: "NEX OS Project Structure and File Layout"
+title: "NEX OS Directory Structure: Source, WASM, and Config"
 sidebarTitle: "Project Structure"
 description: "Complete guide to the NEX OS directory layout — source code, context providers, built-in apps, WASM modules, and configuration files."
 ---
@@ -8,7 +8,7 @@ NEX OS follows a monorepo-style layout where the entire browser OS lives inside 
 
 ## Top-Level Directory Tree
 
-```
+```text
 windows/
 ├── src/                       # Main application source code
 ├── assembly/                  # WebAssembly source (AssemblyScript)
@@ -35,7 +35,7 @@ windows/
 
 All React, TypeScript, and CSS source lives here. It is subdivided into five main folders, each with a single responsibility.
 
-```
+```text
 src/
 ├── components/
 │   ├── apps/                  # All desktop application components
@@ -113,7 +113,7 @@ Each file in `apps/` is a self-contained React component that renders inside a `
 
 These components handle the OS lifecycle screens and the 3D background engine — they are not user-launched applications, but core parts of the OS shell.
 
-```
+```text
 system/
 ├── Background3D.tsx           # Theme-aware 3D background orchestrator
 ├── BootScreen.tsx             # Animated POST / BIOS screen
@@ -166,7 +166,7 @@ NEX OS includes two separate WebAssembly compilation targets — one in Assembly
 
 ### AssemblyScript (`assembly/`)
 
-```
+```text
 assembly/
 ├── index.ts        # Exported WASM functions: calculateCPULoad, getRank, etc.
 └── tsconfig.json   # TypeScript configuration scoped for AssemblyScript
@@ -184,7 +184,7 @@ npm run build:as
 
 ### Rust (`wasm-engine/`)
 
-```
+```text
 wasm-engine/
 ├── src/
 │   └── lib.rs      # Full Rust WASM engine: calculations, process utilities, C++ transpiler

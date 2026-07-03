@@ -4,7 +4,7 @@ sidebarTitle: "Overview"
 description: "NEX OS uses WebAssembly modules (AssemblyScript and Rust) for CPU-intensive tasks like system metrics — achieving up to 100x faster calculations than pure JavaScript."
 ---
 
-When NEX OS runs real-time operations like Task Manager metrics or audio normalization, JavaScript alone is not enough. The JavaScript main thread can saturate quickly when performing complex calculations every few milliseconds, causing the UI to stutter or freeze. To solve this, NEX OS delegates those CPU-intensive operations to **WebAssembly (WASM)** — compiled binary code that executes at near-native speed inside the browser, without blocking the React rendering pipeline.
+When NEX OS runs real-time operations like Task Manager metrics, JavaScript alone is not enough. The JavaScript main thread can saturate quickly when performing complex calculations every few milliseconds, causing the UI to stutter or freeze. To solve this, NEX OS delegates those CPU-intensive operations to **WebAssembly (WASM)** — compiled binary code that executes at near-native speed inside the browser, without blocking the React rendering pipeline.
 
 ## Why WebAssembly?
 
@@ -67,7 +67,6 @@ WASM is not used everywhere — only in places where JavaScript performance is g
 | Feature | Module | Functions Used |
 |---|---|---|
 | **Task Manager** — real-time CPU/memory metrics | AssemblyScript | `calculateLoad`, `getRank` |
-| **Audio processing** | AssemblyScript | `normalizeAudio` |
 | **Dev-C++ 2026** — C++ transpiler | Rust | `wasm-engine/src/lib.rs` |
 | **Process management** | Rust | `wasm-engine/src/lib.rs` |
 
@@ -84,7 +83,7 @@ const { isReady, isWasm, calculateLoad, getRank } = useWasmEngine();
 
 if (!isReady) return <div>Loading...</div>;
 
-const load = calculateLoad(0.7, 0.4, 0.2);
+const load = calculateLoad(0.7, 0.4);
 const rank = getRank(load);
 // isWasm tells you whether WASM or the JS fallback is active
 ```

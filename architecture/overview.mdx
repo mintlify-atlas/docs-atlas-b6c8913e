@@ -10,7 +10,7 @@ NEX OS is a browser-based desktop operating system built on a layered React arch
 
 At startup, `App.tsx` mounts a nested stack of context providers before any UI is rendered. Each provider owns a distinct domain of OS state, and together they form the layered kernel of the system.
 
-```
+```text
 App.tsx
 ├── SettingsProvider          — theme, volume, brightness, systemState, wallpaper
 ├── MusicPlayerProvider       — background audio playback context
@@ -73,7 +73,7 @@ type SystemState =
 
 Every user interaction follows the same reactive cycle through the provider tree. No component reaches outside its own layer — data travels strictly through hooks.
 
-```
+```text
 User Interaction (click, keyboard, drag)
         ↓
    React Component

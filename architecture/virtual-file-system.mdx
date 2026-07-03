@@ -1,7 +1,7 @@
 ---
-title: "Virtual File System: In-Memory Storage for NEX OS"
+title: "Virtual File System: In-Memory VFS Storage for NEX OS"
 sidebarTitle: "Virtual File System"
-description: "NEX OS implements a sandboxed in-memory VFS using React context. Supports create, read, update, delete, and recursive folder operations — no real disk access."
+description: "NEX OS implements a sandboxed in-memory VFS via React context, supporting create, read, update, delete, and recursive folder removal — zero disk access."
 ---
 
 Browser security prevents any web application from reading or writing to the user's real file system without explicit permission dialogs. NEX OS takes a different approach entirely: it implements a complete **Virtual File System (VFS)** that lives entirely in React state, managed by `FileSystemProvider` and consumed through the `useFileSystem()` hook. From the perspective of every application running inside NEX OS — File Explorer, Notepad, the Terminal, the NEX Runtime package manager — this in-memory tree behaves identically to a real disk. Files can be created, read, updated, and deleted, folders can be navigated, and recursive deletions correctly clean up all descendants.
@@ -50,7 +50,7 @@ interface VirtualFile {
 
 `FileSystemProvider` initialises with a pre-populated directory tree that mirrors a standard Windows file system layout. This tree is created in React state at provider mount time — no disk reads occur.
 
-```
+```text
 C:/
 ├── Users/
 │   └── Default/

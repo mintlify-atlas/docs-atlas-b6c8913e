@@ -1,7 +1,7 @@
 ---
 title: "Task Manager: Real-Time System Monitoring via WebAssembly"
 sidebarTitle: "Task Manager"
-description: "NEX OS Task Manager uses a WebAssembly engine to calculate CPU and memory metrics at near-native speed, delivering real-time performance graphs at 60 FPS."
+description: "NEX OS Task Manager uses a WebAssembly engine for near-native CPU and memory monitoring, with real-time performance graphs and live process tracking."
 ---
 
 Task Manager (`TaskManager.tsx`) is the system monitoring hub of NEX OS and the only built-in application that uses real hardware telemetry. While most NEX OS apps operate entirely within the virtual environment, Task Manager bridges the gap between the simulation and the real machine: it reads actual CPU, memory, and GPU data from the host system via a Vite server API, and uses a **WebAssembly engine** (written in both AssemblyScript and Rust) to process that data at near-native speed — roughly 100× faster than the equivalent pure-JavaScript calculation.
@@ -35,32 +35,39 @@ The `useWasmEngine` hook (`src/utils/useWasmEngine.ts`) is the bridge between th
 |-------------------|------|-------------|
 | `isReady` | `boolean` | `true` once the WASM module has finished loading |
 | `isWasm` | `boolean` | `true` if running the Rust/WASM engine; `false` if using the JavaScript fallback |
-| `calculateLoad` | `(cpu: number, mem: number) => number` | Calculates a weighted system load score |
-| `getRank` | `(processName: string, cpu: number) => number` | Returns a priority rank (0–3) for a process |
-| `simulateProcesses` | `(processes, tick, openWindows) => Process[]` | Runs a full process simulation tick |
-| `processColor` | `(name: string) => string` | Deterministic hex color for a process name |
+| `calculateLoad` | `(cpu: number, mem: number, disk: number) => number` | Calculates a weighted system load score from CPU, memory, and disk inputs |
+| `getRank` | `(load: number) => number` | Returns a priority rank (0–3) given a load score |
+| `simulateProcesses` | `(processes: WasmProcessSnapshot[], tick: number, openWindows: string[]) => WasmProcessSnapshot[]` | Runs a full process simulation tick |
+| `processColor` | `(name: string) => string` | Deterministic HSL color string for a process name |
+| `aggregateMetrics` | `(processes: WasmProcessSnapshot[], totalRamKb: number, tick: number) => WasmSystemMetrics` | Aggregates per-process data into system-wide metrics |
+| `transpileCpp` | `(code: string) => { js_code: string; errors: string[]; warnings: string[] }` | Passes C++ source through the WASM transpiler (used by Dev-C++ 2026) |
+| `generateCpuHistory` | `(base: number, length: number, seed?: number) => number[]` | Generates a seeded CPU history array for chart pre-population |
+| `ema` | `(data: number[], alpha?: number) => number[]` | Applies exponential moving average smoothing to a data series |
 
-When the WASM module is not yet loaded or fails to initialize, `useWasmEngine` automatically falls back to a pure JavaScript implementation. The Task Manager UI shows a badge in the top-right corner indicating which engine is active:
+When the WASM module is not yet loaded or fails to initialize, `useWasmEngine` automatically falls back to a pure JavaScript implementation of every function. The Task Manager UI shows a badge in the top-right corner indicating which engine is active:
 
 - **`⚙ Rust/WASM`** — The compiled Rust engine is running (cyan badge)
 - **`⚙ JS Engine`** — Falling back to the JavaScript implementation (yellow badge)
 
 ```typescript
-// AssemblyScript source — assembly/index.ts
-export function calculateMetrics(
-  cpuUsage: f64,
-  memUsage: f64
-): f64 {
-  // Near-native calculation
-  return (cpuUsage * 0.7) + (memUsage * 0.3);
-}
-```
+// src/utils/useWasmEngine.ts — hook usage in TaskManager.tsx
+import { useWasmEngine } from '../../utils/useWasmEngine';
 
-```typescript
-// React component — TaskManager.tsx
 const TaskManager = () => {
-  const metrics = wasmModule.calculateMetrics(0.85, 0.40);
-  return <div>Load: {metrics.toFixed(2)}%</div>;
+  const { isReady, isWasm, calculateLoad, getRank, simulateProcesses } = useWasmEngine();
+
+  if (!isReady) return <div>Loading engine...</div>;
+
+  // calculateLoad accepts three arguments: cpu, mem, disk (all 0–100)
+  const load = calculateLoad(0.85, 0.40, 0.10);
+  const rank = getRank(load); // 0=low, 1=normal, 2=high, 3=critical
+
+  return (
+    <div>
+      <span>Load: {load.toFixed(2)}%</span>
+      <span>Engine: {isWasm ? 'Rust/WASM' : 'JS Fallback'}</span>
+    </div>
+  );
 };
 ```
 

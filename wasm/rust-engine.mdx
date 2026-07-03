@@ -13,13 +13,13 @@ Alongside the AssemblyScript module, NEX OS ships a full Rust WebAssembly engine
 ```
 wasm-engine/
 ├── src/
-│   └── lib.rs      # WASM module: metrics, processes, C++ transpiler
+│   └── lib.rs      # WASM module: system calculations, C++ transpiler, process management
 ├── Cargo.toml      # Rust project configuration and dependencies
 └── Cargo.lock      # Deterministic dependency lock file
 ```
 
 <Note>
-  The compiled output of the Rust engine is committed to the repository as `public/process_utils.wasm`. You only need to recompile if you modify `wasm-engine/src/lib.rs`. See the [Recompilation](#recompilation) section below.
+  The pre-compiled binary committed to the repository at `public/process_utils.wasm` is built from the AssemblyScript source (`assembly/index.ts`) — not from the Rust engine. The `asconfig.json` targets `public/process_utils.wasm` as its output and that file ships with a `.wasm.map` source map consistent with an AssemblyScript build. You only need to compile the Rust engine separately if you modify `wasm-engine/src/lib.rs`. See the [Recompilation](#recompilation) section below.
 </Note>
 
 ---
@@ -29,7 +29,7 @@ wasm-engine/
 The Rust WASM module backs three distinct capabilities inside NEX OS:
 
 <CardGroup cols={3}>
-  <Card title="System Load Calculations" icon="microchip">
+  <Card title="System Calculations" icon="microchip">
     High-frequency CPU and memory metric calculations for the Task Manager, running at native speed without saturating the JS thread.
   </Card>
   <Card title="C++ Transpiler" icon="code">
@@ -69,7 +69,7 @@ The **Dev-C++ 2026** app (`src/components/apps/DevCpp2026.tsx`) exposes a full i
 This utility acts as the bridge between the React component layer and the Rust binary:
 
 1. **The IDE component** calls `cppEngine.ts` with the raw C++ source string.
-2. **`cppEngine.ts`** loads the Rust WASM binary (same `public/process_utils.wasm` served by the static file server) and invokes the exported Rust function.
+2. **`cppEngine.ts`** loads the Rust WASM binary and invokes the exported Rust function.
 3. **The Rust function** in `lib.rs` processes the C++ source and returns the result.
 4. **`cppEngine.ts`** passes the output back to the IDE for display.
 
@@ -117,7 +117,7 @@ cargo build --target wasm32-unknown-unknown --release
 
 ## The Pre-Compiled Binary
 
-The `public/process_utils.wasm` file committed to the repository is a pre-compiled binary that works out of the box — no Rust toolchain required for day-to-day development. It is loaded by the `wasmLoader` utility at startup:
+The `public/process_utils.wasm` file committed to the repository is a pre-compiled binary built from the AssemblyScript source. It works out of the box — no Rust toolchain required for day-to-day development. It is loaded by the `wasmLoader` utility at startup:
 
 ```typescript
 // src/utils/wasmLoader.ts
@@ -129,10 +129,8 @@ export async function initWasm() {
 }
 ```
 
-Both the AssemblyScript and Rust engines share this same file path. The `asconfig.json` `outFile` and the Rust build output both target `public/process_utils.wasm`, so whichever engine was most recently compiled is the one in the binary. In the committed state, the Rust engine is active.
-
 <Note>
-  If you run `npm run build:as` after a Rust build, the AssemblyScript compiler will overwrite `public/process_utils.wasm` with the AssemblyScript binary. Rebuild with Rust (`wasm-pack`) to restore the full engine.
+  Both the AssemblyScript and Rust engines can target `public/process_utils.wasm`. Running `npm run build:as` regenerates that file from AssemblyScript. Running `wasm-pack build` from `wasm-engine/` replaces it with the Rust output. The binary committed to the repository is from AssemblyScript — rebuild with `wasm-pack` from `wasm-engine/` to activate the full Rust engine.
 </Note>
 
 ---
@@ -144,14 +142,14 @@ The Rust engine is one of two WebAssembly layers in the NEX OS codebase. Here is
 ```
 windows/
 ├── assembly/
-│   └── index.ts              # AssemblyScript source (TypeScript-like)
+│   └── index.ts              # AssemblyScript source (calculateLoad, getRank)
 ├── wasm-engine/
 │   ├── src/
-│   │   └── lib.rs            # Rust WASM source
+│   │   └── lib.rs            # Rust WASM source (system calc, C++ transpiler, process mgmt)
 │   ├── Cargo.toml            # Rust manifest
 │   └── Cargo.lock            # Locked dependencies
 ├── public/
-│   └── process_utils.wasm    # Pre-compiled binary (served statically)
+│   └── process_utils.wasm    # Pre-compiled binary (AssemblyScript build, served statically)
 └── src/
     └── utils/
         ├── wasmLoader.ts     # Fetches and instantiates the binary

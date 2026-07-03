@@ -1,10 +1,10 @@
 ---
 title: "Built-in NEX OS Applications: Full App Suite Overview"
 sidebarTitle: "Overview"
-description: "NEX OS ships with 20+ built-in applications covering productivity, development, system management, multimedia, and browsing — all running in isolated windows."
+description: "NEX OS ships 25+ built-in apps covering productivity, development, system tools, and multimedia — each running in its own isolated, draggable window."
 ---
 
-NEX OS comes pre-loaded with more than 20 built-in applications, ranging from system utilities and developer tools to multimedia players and productivity suites. Every application runs inside its own draggable, resizable window managed by `WindowManagerContext` — the central kernel of the OS. Each app is a self-contained React component rendered inside the `Window` Higher-Order Component, which provides drag, resize, snap layouts, minimize, maximize, and z-index management without any app needing to implement those behaviors itself.
+NEX OS comes pre-loaded with more than 25 built-in applications, ranging from system utilities and developer tools to multimedia players and productivity suites. Every application runs inside its own draggable, resizable window managed by `WindowManagerContext` — the central kernel of the OS. Each app is a self-contained React component rendered inside the `Window` Higher-Order Component, which provides drag, resize, snap layouts, minimize, maximize, and z-index management without any app needing to implement those behaviors itself.
 
 ## App Categories
 
@@ -40,6 +40,7 @@ Every file under `src/components/apps/` corresponds to a registered application 
 | Clock | `Clock.tsx` ⭐ | Analog + digital clock, stopwatch with laps, countdown timer, and world timezone support |
 | CMD | `Cmd.tsx` | Windows-style command prompt with npm, pnpm, and `.nex` execution support |
 | Control Panel | `ControlPanel.tsx` | Full system settings: wallpaper, neon theme, brightness, volume, accent color |
+| Counter-Strike | `counter.tsx` | Retro mini-game app |
 | Dev-C++ 2026 | `DevCpp2026.tsx` | IDE with real g++ compilation support via `cppEngine.ts` |
 | File Explorer | `FileExplorer.tsx` | Virtual filesystem navigation with tree/list views and `.nex` launcher |
 | Internet Explorer | `IEApp.tsx` | Retro IE-style simulated browser for nostalgia |
@@ -57,7 +58,6 @@ Every file under `src/components/apps/` corresponds to a registered application 
 | VS Code | `VsCode.tsx` | Full code editor clone with syntax highlighting |
 | Windows Defender | `WindowsDefender.tsx` | Simulated security and antivirus scanner |
 | WordPad | `WordPad.tsx` | Rich text editor |
-| Counter-Strike | `counter.tsx` | Retro mini-game app |
 | Media Player | `mediaplayer.tsx` | Multimedia playback application |
 
 > ⭐ = New or significantly improved in the latest release (May 2026)
@@ -74,7 +74,7 @@ const { openWindow } = useWindowManager();
 
 openWindow(
   'notepad',             // Unique window ID
-  'notepad',             // App type
+  'notepad',             // App type (appId)
   'Notepad 2.0',         // Window title
   <Document24Regular />  // Window icon
 );

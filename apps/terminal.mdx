@@ -1,7 +1,7 @@
 ---
 title: "Terminal and CMD: Command-Line Interface in NEX OS"
 sidebarTitle: "Terminal"
-description: "NEX OS includes two terminal emulators — CMD (Windows-style) and Terminal Pro (Bash-style) — with simulated npm, pnpm, and .nex executable support via NEX Runtime."
+description: "NEX OS ships two terminal emulators — CMD (Windows-style) and Terminal Pro (Bash-style) — with simulated npm, pnpm, and .nex executable support."
 ---
 
 NEX OS ships two independent terminal emulators: `Cmd.tsx` (modeled after the Windows Command Prompt) and `Terminal.tsx` (modeled after a Bash/PowerShell environment). Both terminals share the same underlying runtime services — `useNexRuntime()` for package management and `.nex` execution, `useFileSystem()` for VFS operations, and `useWindowManager()` for launching apps — but differ in their prompt style, command syntax, and visual appearance.

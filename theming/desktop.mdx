@@ -52,7 +52,7 @@ const {
 
 | Method               | Parameters                          | Description                                                     |
 | -------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| `addDesktopIcon`     | `icon: Omit<DesktopIcon, 'id'>`     | Adds a new icon at the specified `x`/`y` coordinates.           |
+| `addDesktopIcon`     | `icon: Partial<DesktopIcon>`        | Adds a new icon at the specified `x`/`y` coordinates.           |
 | `updateDesktopIcon`  | `id: string, updates: Partial<DesktopIcon>` | Updates any icon property — position, title, or `appId`.  |
 | `removeDesktopIcon`  | `id: string`                        | Permanently removes an icon from the desktop.                   |
 | `sortDesktopIcons`   | `by: 'name' \| 'type' \| 'position'` | Re-orders all icons alphabetically, by type, or by grid position.|
@@ -157,7 +157,7 @@ interface AppWindow {
 
 ## Widgets Panel
 
-The widgets panel slides in from the left side of the desktop and is toggled with `Win + W` or the widgets button in the taskbar. It is managed by `useUI()` from `UIContext`.
+The widgets panel slides in from the left side of the desktop and is toggled via the widgets button in the taskbar or by right-clicking the desktop and selecting **Toggle widgets panel**. It is managed by `useUI()` from `UIContext`.
 
 ```typescript
 import { useUI } from '../context/UIContext';

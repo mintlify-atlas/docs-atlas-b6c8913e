@@ -10,7 +10,7 @@ AssemblyScript lets you write TypeScript-like code that compiles directly to Web
 
 ## Exported Functions
 
-The `assembly/index.ts` file is the sole source of truth for the AssemblyScript module. The following functions are exported and available to React components through the `useWasmEngine` hook and the `wasmLoader` utility.
+The `assembly/index.ts` file is the sole source of truth for the AssemblyScript module. The following two functions are exported and available to React components through the `useWasmEngine` hook and the `wasmLoader` utility.
 
 ```typescript
 // assembly/index.ts
@@ -29,45 +29,7 @@ export function getRank(load: f64): i32 {
 }
 ```
 
-These are the canonical functions from the real source. The `WASM_BRIDGE.md` documentation also demonstrates additional batch-processing patterns:
-
-```typescript
-// assembly/index.ts
-
-// Calculates the weighted average of a metric dataset
-export function processMetrics(data: Float64Array): f64 {
-  let sum: f64 = 0;
-  let count: i32 = 0;
-  for (let i = 0; i < data.length; i++) {
-    sum += data[i];
-    count++;
-  }
-  return count > 0 ? sum / f64(count) : 0;
-}
-
-// Counts samples that exceed a performance threshold
-export function analyzePerformance(samples: Float64Array, threshold: f64): i32 {
-  let problematicCount: i32 = 0;
-  for (let i = 0; i < samples.length; i++) {
-    if (samples[i] > threshold) problematicCount++;
-  }
-  return problematicCount;
-}
-
-// Normalizes an audio buffer in place (used by the Media Player)
-export function normalizeAudio(samples: Float64Array): void {
-  let max: f64 = 0;
-  for (let i = 0; i < samples.length; i++) {
-    let abs = samples[i] > 0 ? samples[i] : -samples[i];
-    if (abs > max) max = abs;
-  }
-  if (max > 0) {
-    for (let i = 0; i < samples.length; i++) {
-      samples[i] = samples[i] / max;
-    }
-  }
-}
-```
+`calculateLoad` takes two `f64` arguments — `cpu` and `mem` as decimal fractions — and returns a weighted system-impact score. `getRank` takes that score and maps it to an integer rank (0–3) that the Task Manager uses to colour-code process rows.
 
 ---
 
@@ -97,7 +59,7 @@ AssemblyScript is a strict subset of TypeScript with explicit numeric types. The
 
     ```typescript
     // assembly/index.ts
-    export function calculateSystemLoad(cpu: f64, mem: f64): f64 {
+    export function calculateLoad(cpu: f64, mem: f64): f64 {
       return (cpu * 0.7) + (mem * 0.3);
     }
     ```
@@ -112,12 +74,13 @@ AssemblyScript is a strict subset of TypeScript with explicit numeric types. The
     This internally calls `asc assembly/index.ts --target release` using the configuration in `asconfig.json`.
   </Step>
   <Step title="Verify the output files">
-    After a successful build, two files are updated in `public/`:
+    After a successful build, the following files are updated in `public/`:
 
     ```
     public/
-    ├── process_utils.wasm   ← Compiled WebAssembly binary
-    └── process_utils.js     ← ESM wrapper with TypeScript bindings
+    ├── process_utils.wasm      ← Compiled WebAssembly binary
+    ├── process_utils.wasm.map  ← Source map for DevTools debugging
+    └── process_utils.js        ← ESM wrapper (bindings: "esm")
     ```
   </Step>
   <Step title="Test in the browser">
@@ -160,11 +123,11 @@ The `asconfig.json` file at the project root controls how AssemblyScript compile
 
 | Key | Value | Effect |
 |---|---|---|
-| `outFile` | `public/process_utils.wasm` | Where the binary is written |
-| `optimizeLevel` | `3` | Maximum LLVM-level optimizations |
-| `shrinkLevel` | `0` | Preserves debug info in release builds |
-| `sourceMap` | `true` | Enables source-mapped debugging in DevTools |
-| `bindings` | `"esm"` | Emits an ES module wrapper for easy import |
+| `outFile` | `public/process_utils.wasm` | Where the binary is written (both targets) |
+| `optimizeLevel` | `3` | Maximum LLVM-level optimizations (release only) |
+| `shrinkLevel` | `0` | Size shrinking disabled — preserves readable output |
+| `sourceMap` | `true` | Emits `.wasm.map` for source-mapped debugging in DevTools |
+| `bindings` | `"esm"` | Emits an ES module wrapper (`process_utils.js`) for easy import |
 
 <Note>
   The pre-compiled `public/process_utils.wasm` is committed to the repository. You only need to run `npm run build:as` if you modify `assembly/index.ts`.
@@ -261,29 +224,29 @@ export function add(a: i32, b: i32): i32 {
 
 ## Performance Tips
 
-Getting the best out of WASM requires minimizing the cost of crossing the JS ↔ WASM boundary.
-
-**Batch operations — don't call WASM in a loop:**
-
-```typescript
-// ❌ Expensive: 1,000,000 WASM calls
-const results: number[] = [];
-for (let i = 0; i < 1_000_000; i++) {
-  results.push(wasm.calculateLoad(data[i], data[i + 1]));
-}
-
-// ✅ Cheap: 1 WASM call processes the whole dataset
-const results = wasm.processMetrics(new Float64Array(data));
-```
+Getting the best out of WASM requires minimising the cost of crossing the JS ↔ WASM boundary.
 
 **Use precise numeric types:**
 
 ```typescript
-// ✅ i32 for integer counters — maps to a 32-bit int natively
+// ✅ i32 for integer ranks — maps to a 32-bit int natively
 export function getRank(load: f64): i32 { ... }
 
 // ❌ Avoid f64 for values that are always integers
 export function getRank(load: f64): f64 { ... } // unnecessary precision
+```
+
+**Batch operations — don't call WASM in a loop:**
+
+```typescript
+// ❌ Expensive: many individual WASM calls
+for (let i = 0; i < samples.length; i++) {
+  ranks.push(wasm.getRank(wasm.calculateLoad(cpu[i], mem[i])));
+}
+
+// ✅ Cheap: accumulate data in JS, make one WASM call per metric
+const load = wasm.calculateLoad(avgCpu, avgMem);
+const rank = wasm.getRank(load);
 ```
 
 **Minimise data copying:** Pass `Float64Array` views of existing buffers rather than creating new arrays just for a WASM call.
@@ -301,15 +264,13 @@ import { getWasm } from './wasmLoader';
 export const benchmarkWasm = async () => {
   const wasm = await getWasm();
 
-  const data = new Float64Array(1_000_000).map(() => Math.random());
+  console.time('WASM calculateLoad');
+  const wasmResult = wasm.calculateLoad(0.85, 0.40);
+  console.timeEnd('WASM calculateLoad');
 
-  console.time('WASM processMetrics');
-  const wasmResult = wasm.processMetrics(data);
-  console.timeEnd('WASM processMetrics');
-
-  console.time('JS processMetrics');
-  const jsResult = data.reduce((s, v) => s + v, 0) / data.length;
-  console.timeEnd('JS processMetrics');
+  console.time('JS calculateLoad');
+  const jsResult = (0.85 * 0.7) + (0.40 * 0.3);
+  console.timeEnd('JS calculateLoad');
 
   console.log('WASM:', wasmResult, '| JS:', jsResult);
   console.log('Match:', Math.abs(wasmResult - jsResult) < 0.0001);

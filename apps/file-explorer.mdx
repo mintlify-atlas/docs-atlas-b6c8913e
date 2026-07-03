@@ -1,7 +1,7 @@
 ---
 title: "File Explorer: Virtual Filesystem Navigation in NEX OS"
 sidebarTitle: "File Explorer"
-description: "The NEX OS File Explorer provides tree/list views, drag-and-drop, .nex executable launching, and full VFS navigation — all backed by FileSystemContext in memory."
+description: "NEX OS File Explorer provides tree/list views, drag-and-drop, and .nex executable launching — all backed by the in-memory FileSystemContext VFS."
 ---
 
 File Explorer (`FileExplorer.tsx`) is the primary interface for navigating the NEX OS Virtual File System (VFS). Because browsers have no direct access to the host machine's disk, the entire filesystem lives in memory — managed by `FileSystemContext` — and File Explorer provides the familiar folder-tree experience on top of it. It supports multiple view modes, clipboard operations, inline renaming, and the ability to launch `.nex` executables directly from the file grid.

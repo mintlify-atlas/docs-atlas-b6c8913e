@@ -1,7 +1,7 @@
 ---
 title: "NEX Runtime: Simulated npm, pnpm, and .nex Executables"
 sidebarTitle: "NEX Runtime"
-description: "NEX Runtime is an in-memory execution engine that simulates npm and pnpm package management, process tracking, and .nex binary launching inside NEX OS terminals."
+description: "NEX Runtime simulates npm and pnpm package management, process telemetry, and .nex binary launching entirely in-memory inside the NEX OS browser tab."
 ---
 
 NEX Runtime (`NexRuntimeContext`, mounted as `NexRuntimeProvider` in `App.tsx`) is an in-memory subsystem that simulates a real package management and execution environment entirely inside the browser. When a user types `npm install react` in the NEX OS terminal, the runtime resolves dependencies, produces realistic streaming output line-by-line with authentic timing, and mutates the Virtual File System to create `package.json`, `package-lock.json`, and a `node_modules/` folder — all without touching the network or the user's actual machine. The same subsystem also powers `.nex` binary resolution and feeds process telemetry to the Task Manager.
@@ -10,7 +10,7 @@ NEX Runtime (`NexRuntimeContext`, mounted as `NexRuntimeProvider` in `App.tsx`) 
 
 `NexRuntimeProvider` owns four distinct internal domains that together simulate a complete execution environment:
 
-```
+```text
 NexRuntimeProvider
  ├── packages   — installed dependency map per virtual directory path
  ├── projects   — virtual package.json structures (name, version, scripts, dependencies)
@@ -20,7 +20,7 @@ NexRuntimeProvider
 
 These four domains integrate with the two other major OS subsystems:
 
-```
+```text
 NexRuntime
     │
     ├──► WindowManagerContext   (resolveNex launches windows)
@@ -151,7 +151,7 @@ const ProcessList = () => {
 
 When `npm install` completes, the VFS reflects the result immediately. A user who opens File Explorer and navigates to the project directory will see the following structure created by the runtime:
 
-```
+```text
 my-project/
 ├── package.json          — name, version, scripts, dependencies
 ├── package-lock.json     — resolved dependency tree snapshot
