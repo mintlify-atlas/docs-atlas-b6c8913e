@@ -1,0 +1,103 @@
+---
+title: "File Explorer: Virtual Filesystem Navigation in NEX OS"
+sidebarTitle: "File Explorer"
+description: "The NEX OS File Explorer provides tree/list views, drag-and-drop, .nex executable launching, and full VFS navigation — all backed by FileSystemContext in memory."
+---
+
+File Explorer (`FileExplorer.tsx`) is the primary interface for navigating the NEX OS Virtual File System (VFS). Because browsers have no direct access to the host machine's disk, the entire filesystem lives in memory — managed by `FileSystemContext` — and File Explorer provides the familiar folder-tree experience on top of it. It supports multiple view modes, clipboard operations, inline renaming, and the ability to launch `.nex` executables directly from the file grid.
+
+## Key Features
+
+- **Tree and list view modes** — Switch between icon grid, compact list, and details views using the toolbar view switcher (`Grid28Regular`, `List20Regular`, `TextColumnTwoLeft20Regular`).
+- **Drag-and-drop file and folder management** — Move items between directories via the underlying `FileSystemContext` operations (`cutItem`, `pasteItem`).
+- **Double-click to open** — Folders navigate into the directory; `.txt` files open in Notepad; `.jpg`/`.png` files with an `imageUrl` open in the Photos viewer; `.nex` files launch their registered application.
+- **Create, rename, delete** — Use the ribbon toolbar or the right-click context menu (`ContextMenu` component) to create new folders and files, rename inline with keyboard confirm/cancel, or delete items.
+- **Path breadcrumb navigation** — The address bar renders the full path as clickable breadcrumb segments, computed from the VFS tree by walking `parentId` references up to the root.
+- **Back / Forward / Up navigation** — A local history stack (`history`, `historyIdx`) mirrors browser-style navigation for the folder path.
+- **Sidebar quick links** — One-click shortcuts to `C:` drive root, Desktop, Documents, and Pictures virtual directories.
+- **Search bar** — Inline search input in the navigation bar (integrated with the folder contents grid).
+
+---
+
+## How `.nex` Launching Works
+
+`.nex` files are NEX OS virtual executables — they are `VirtualFile` entries in the filesystem with `ext: 'nex'` and a `nexPayload` metadata object. When the user double-clicks a `.nex` file in File Explorer, the `handleDoubleClick` handler reads `nexPayload` and calls `openWindow()` from `useWindowManager`:
+
+```typescript
+// FileExplorer.tsx — handleDoubleClick
+} else if (item.ext === 'nex' && item.nexPayload) {
+  const payload = item.nexPayload;
+  const appIcon = NEX_ICONS[payload.appId] || <Flash20Regular style={{ color: '#00ffff' }} />;
+  openWindow(payload.appId, payload.appId, payload.title, appIcon);
+}
+```
+
+The `NEX_ICONS` map inside `FileExplorer.tsx` resolves icon components for known `appId` values (e.g., `notepad`, `cmd`, `terminal`, `calculator`, `taskmanager`). Unknown app IDs fall back to the `Flash20Regular` cyan icon — the standard NEX executable icon.
+
+---
+
+## Integration with VFS Context
+
+File Explorer consumes the `useFileSystem()` hook from `FileSystemContext`. The full set of operations available to the component is:
+
+```typescript
+const {
+  files,        // VirtualFile[] — flat list of all items in the VFS
+  createFolder, // (parentId, name) => void
+  createFile,   // (parentId, name, ext) => void
+  deleteItem,   // (id) => void
+  renameItem,   // (id, newName) => void
+  copyItem,     // (id) => void
+  cutItem,      // (id) => void
+  pasteItem,    // (targetFolderId) => void
+  clipboard,    // current clipboard item ID or null
+} = useFileSystem();
+```
+
+The `currentFolderFiles` list is derived with `useMemo` by filtering all files where `parentId === currentFolderId`, making re-renders efficient even as the VFS grows. The breadcrumb path string is also memoized by walking the parent chain from the current folder to the root.
+
+---
+
+## File Type Icons
+
+File Explorer renders contextual icons for each file type using the `getFileIcon()` helper:
+
+| Extension / Type | Icon | Color |
+|------------------|------|-------|
+| `folder` / `drive` | `Folder20Filled` / `HardDrive20Regular` | Yellow / Blue |
+| `.nex` | `Flash20Regular` | Cyan (`#00ffff`) |
+| `.pdf` | `DocumentPdf20Regular` | Red |
+| `.xlsx` | `TableSimple20Regular` | Green |
+| `.jpg` / `.png` (with URL) | `<img>` thumbnail | — |
+| `.mp3` | `MusicNote220Regular` | Purple |
+| `.txt` / default | `Document20Regular` | Grey |
+
+---
+
+## VFS Sandbox Note
+
+<Note>
+  The Virtual File System is entirely sandboxed in browser memory. No read or write operations touch the user's real disk. All files and folders are stored as JavaScript objects in the `FileSystemContext` state tree and are reset on page reload (unless persistence is added via `localStorage`). This is by design — it is a core security boundary of running an OS in a browser context.
+</Note>
+
+---
+
+## Context Menu Operations
+
+Right-clicking on a file or folder opens the `ContextMenu` component with the following options:
+
+**On a file or folder:**
+- Open
+- Cut (`Cut20Regular`)
+- Copy (`Copy20Regular`)
+- Delete (`Delete20Regular`)
+- Rename (`Rename20Regular`)
+
+**On empty space (background):**
+- Paste (disabled when clipboard is empty)
+- New Folder
+- New File
+
+<Tip>
+  After cutting or copying a file, navigate to the destination folder in the left sidebar and right-click the background to paste. The clipboard state is held in `FileSystemContext` and persists across folder navigation within the same session.
+</Tip>

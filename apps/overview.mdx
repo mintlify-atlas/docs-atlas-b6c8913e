@@ -1,0 +1,114 @@
+---
+title: "Built-in NEX OS Applications: Full App Suite Overview"
+sidebarTitle: "Overview"
+description: "NEX OS ships with 20+ built-in applications covering productivity, development, system management, multimedia, and browsing — all running in isolated windows."
+---
+
+NEX OS comes pre-loaded with more than 20 built-in applications, ranging from system utilities and developer tools to multimedia players and productivity suites. Every application runs inside its own draggable, resizable window managed by `WindowManagerContext` — the central kernel of the OS. Each app is a self-contained React component rendered inside the `Window` Higher-Order Component, which provides drag, resize, snap layouts, minimize, maximize, and z-index management without any app needing to implement those behaviors itself.
+
+## App Categories
+
+<CardGroup cols={2}>
+  <Card title="File Explorer" icon="folder-open" href="/apps/file-explorer">
+    Navigate the Virtual File System with tree and list views, drag-and-drop, breadcrumb paths, and `.nex` executable launching.
+  </Card>
+  <Card title="Terminal & CMD" icon="terminal" href="/apps/terminal">
+    Two terminal emulators — Windows CMD-style (`Cmd.tsx`) and Bash-style (`Terminal.tsx`) — with npm, pnpm, and `.nex` runtime support.
+  </Card>
+  <Card title="Task Manager" icon="chart-bar" href="/apps/task-manager">
+    Real-time CPU and memory monitoring powered by a WebAssembly engine written in AssemblyScript and Rust, delivering near-native performance.
+  </Card>
+  <Card title="NEX Browser" icon="globe" href="/apps/browser">
+    NexBrowser Pro: an integrated multi-tab browser with YouTube playback, per-tab history, bookmarks, and private mode.
+  </Card>
+  <Card title="Productivity Apps" icon="pencil" href="/apps/productivity">
+    Notepad 2.0, Paint, Photos gallery, Calculator, Calendar, Clock, WordPad, VS Code clone, Dev-C++ 2026, SpotifyMini, and more.
+  </Card>
+</CardGroup>
+
+---
+
+## Complete Applications Table
+
+Every file under `src/components/apps/` corresponds to a registered application in NEX OS.
+
+| App | Source File | Description |
+|-----|-------------|-------------|
+| NexBrowser Pro | `BrowserApp.tsx` | Integrated browser with multi-tab support, YouTube playback, per-tab history, and private mode |
+| Calculator | `Calculator.tsx` | Functional calculator with operation history |
+| Calendar | `Calendar.tsx` | Monthly view calendar with events and date picker |
+| Clock | `Clock.tsx` ⭐ | Analog + digital clock, stopwatch with laps, countdown timer, and world timezone support |
+| CMD | `Cmd.tsx` | Windows-style command prompt with npm, pnpm, and `.nex` execution support |
+| Control Panel | `ControlPanel.tsx` | Full system settings: wallpaper, neon theme, brightness, volume, accent color |
+| Dev-C++ 2026 | `DevCpp2026.tsx` | IDE with real g++ compilation support via `cppEngine.ts` |
+| File Explorer | `FileExplorer.tsx` | Virtual filesystem navigation with tree/list views and `.nex` launcher |
+| Internet Explorer | `IEApp.tsx` | Retro IE-style simulated browser for nostalgia |
+| Image Viewer | `ImageViewer.tsx` | Image preview with zoom and navigation |
+| Manual | `ManualApp.tsx` | Built-in system manual and documentation browser |
+| Notepad 2.0 | `Notepad.tsx` ⭐ | Advanced text editor with menu bar, zoom, fonts, word count, and status bar |
+| Paint | `Paint.tsx` | Canvas drawing application with tools, color palette, and export |
+| Photos | `Photos.tsx` ⭐ | Image gallery with lightbox, zoom, rotation, thumbnail strip, and custom URL support |
+| Recycle Bin | `RecycleBin.tsx` | Virtual trash with restore support |
+| Search | `SearchApp.tsx` | Global application and file search |
+| Settings | `Settings.tsx` | System preferences panel |
+| SpotifyMini | `SpotifyMini.tsx` ⭐ | Simulated music player with playlist and playback controls |
+| Task Manager | `TaskManager.tsx` | Real-time CPU/RAM monitoring via WASM + simulated process list |
+| Terminal Pro | `Terminal.tsx` | Bash/PowerShell-style terminal with npm, pnpm, and `.nex` support |
+| VS Code | `VsCode.tsx` | Full code editor clone with syntax highlighting |
+| Windows Defender | `WindowsDefender.tsx` | Simulated security and antivirus scanner |
+| WordPad | `WordPad.tsx` | Rich text editor |
+| Counter-Strike | `counter.tsx` | Retro mini-game app |
+| Media Player | `mediaplayer.tsx` | Multimedia playback application |
+
+> ⭐ = New or significantly improved in the latest release (May 2026)
+
+---
+
+## App Isolation Model
+
+Each NEX OS application operates in its own React component scope. No application accesses another app's state directly — communication happens exclusively through the shared context layer (`WindowManagerContext`, `FileSystemContext`, `SettingsContext`). This mirrors the micro-frontend architecture pattern: every app is independently mountable, and the `Window` HOC wraps each one to provide system-level capabilities.
+
+```typescript
+// Every app is opened through WindowManager — never rendered directly
+const { openWindow } = useWindowManager();
+
+openWindow(
+  'notepad',             // Unique window ID
+  'notepad',             // App type
+  'Notepad 2.0',         // Window title
+  <Document24Regular />  // Window icon
+);
+```
+
+When a window is minimized and later restored via `restoreWindow()`, the app's internal React state is preserved — the component is never unmounted and re-mounted.
+
+---
+
+## Registering New Applications
+
+All taskbar and start menu applications are declared in `src/constants/apps.tsx`. To add a new app to NEX OS:
+
+<Steps>
+  <Step title="Create the component">
+    Add your new app file to `src/components/apps/MyApp.tsx` and export a default React component.
+  </Step>
+  <Step title="Import in the registry">
+    Open `src/constants/apps.tsx` and import your component at the top.
+  </Step>
+  <Step title="Register the app entry">
+    Add an entry to the `APPS` array with a unique `id`, an icon, a display label, and the component factory:
+    ```typescript
+    import MyApp from '../components/apps/MyApp';
+    import { Star24Regular } from '@fluentui/react-icons';
+
+    { id: 'my-app', icon: <Star24Regular />, label: 'My App', component: () => <MyApp /> }
+    ```
+  </Step>
+  <Step title="(Optional) Add to Start Menu">
+    For the app to appear in the Start Menu, also add an entry to `StartMenu.tsx`.
+  </Step>
+</Steps>
+
+<Tip>
+  You can also expose your app as a `.nex` executable in the Virtual File System by adding a `VirtualFile` with `ext: 'nex'` and a `nexPayload` object pointing to your app's registered `id`. Users can then double-click it in File Explorer or run it from the terminal.
+</Tip>

@@ -1,0 +1,165 @@
+---
+title: "Terminal and CMD: Command-Line Interface in NEX OS"
+sidebarTitle: "Terminal"
+description: "NEX OS includes two terminal emulators — CMD (Windows-style) and Terminal Pro (Bash-style) — with simulated npm, pnpm, and .nex executable support via NEX Runtime."
+---
+
+NEX OS ships two independent terminal emulators: `Cmd.tsx` (modeled after the Windows Command Prompt) and `Terminal.tsx` (modeled after a Bash/PowerShell environment). Both terminals share the same underlying runtime services — `useNexRuntime()` for package management and `.nex` execution, `useFileSystem()` for VFS operations, and `useWindowManager()` for launching apps — but differ in their prompt style, command syntax, and visual appearance.
+
+---
+
+## Supported Commands
+
+Both terminals support a common set of filesystem and utility commands, with syntax differences reflecting their respective OS styles.
+
+| Command | CMD Style | Terminal Pro Style | Description |
+|---------|-----------|-------------------|-------------|
+| `npm install <pkg>` | ✅ | ✅ | Install a virtual npm package with simulated output |
+| `npm run <script>` | ✅ | ✅ | Run a virtual npm script |
+| `pnpm add <pkg>` | ✅ | ✅ | Install via pnpm with purple-colored output |
+| `pnpm run <script>` | ✅ | ✅ | Run a pnpm script |
+| `./file.nex` | ✅ | ✅ | Execute a `.nex` binary from the current path |
+| `help` | ✅ | ✅ | List all available commands |
+| `cls` / `clear` | ✅ | ✅ | Clear the terminal screen |
+| `dir` / `ls` | `dir` | `ls` | List contents of the current directory |
+| `cd <path>` | ✅ | ✅ | Change the current directory |
+| `mkdir <name>` | ✅ | ✅ | Create a new folder in the VFS |
+| `touch <file>` | ✅ | ✅ | Create a new file in the VFS |
+| `echo <text>` | ✅ | ✅ | Print a message to the terminal output |
+| `del` / `rm` | `del` | `rm` | Delete a file or folder |
+| `ping <host>` | ✅ | ✅ | Simulated network ping |
+| `ipconfig` | ✅ | — | Display simulated network configuration |
+| `systeminfo` | ✅ | — | Display OS and runtime version info |
+| `tree` | ✅ | — | Print the VFS directory tree |
+| `node` / `node -v` | ✅ | ✅ | Simulated Node.js runtime (v20.15.0) |
+| `whoami` | ✅ | ✅ | Display current user |
+| `cat <file>` | — | ✅ | Print file contents from the VFS |
+| `pwd` | — | ✅ | Print the current directory path |
+| `env` | — | ✅ | Print simulated environment variables |
+| `which <cmd>` | — | ✅ | Resolve command binary path |
+| `uname` | — | ✅ | Display kernel/OS information |
+| `start <app>` | ✅ | ✅ | Launch a registered NEX app by name |
+| `ver` | ✅ | — | Display NEX OS version string |
+
+---
+
+## NPM and PNPM Workflow
+
+When you run an `npm` or `pnpm` command in either terminal, the request is handed off to the `NexRuntimeContext` via the `npmRun()` or `pnpmRun()` methods. These functions return an **`AsyncGenerator<string>`** that yields output lines one at a time with realistic delays — giving the appearance of a live package installation. The terminal iterates the generator with `for await`:
+
+```typescript
+// Cmd.tsx / Terminal.tsx — runAsync helper
+const runAsync = async (gen: AsyncGenerator<string>, color?: string) => {
+  setIsRunning(true);
+  for await (const line of gen) {
+    if (line === undefined) continue;
+    setLines(prev => [...prev, { text: line, color }]);
+    await new Promise(r => setTimeout(r, 0)); // Yield to DOM
+  }
+  setLines(prev => [...prev, { text: '' }]);
+  setIsRunning(false);
+};
+```
+
+While a package command is running, the input field is disabled and a `⏳` indicator is shown. The VFS is mutated during the run: `package.json`, `package-lock.json` (or `pnpm-lock.yaml`), and `node_modules/` entries are created or updated inside `FileSystemContext`.
+
+```bash
+# Example npm install session in Terminal Pro
+user@nexos:c:\$ npm install react
+
+Installing packages...
+  ✓ react@19.0.0
+
+added 1 package in 1.2s
+```
+
+```bash
+# Example pnpm add session in CMD
+C:\> pnpm add typescript
+
+Packages: +1
+Progress: resolved 1, reused 0, downloaded 1, added 1, done
+
+devDependencies:
++ typescript 5.9.0
+
+Done in 0.8s
+```
+
+---
+
+## Executing `.nex` Files from the Terminal
+
+Both terminals support three forms of `.nex` invocation, all resolved via `resolveNex()` from `NexRuntimeContext`:
+
+```bash
+# Full path with extension
+./notepad.nex
+
+# Extension only (resolved against C:\Program Files\NEX\)
+notepad.nex
+
+# App name without extension (PATH lookup — same as Windows START)
+notepad
+```
+
+When the `.nex` binary is found, the terminal prints a launch message and calls `openWindow()` after a short delay:
+
+```typescript
+// Cmd.tsx — .nex execution handler
+const exe = resolveNex(cmd);
+if (exe) {
+  output.push({ text: `Launching ${exe.title}...`, color: '#60a5fa' });
+  setTimeout(() => {
+    openWindow(exe.appId, exe.appId, exe.title, NEX_ICONS[exe.appId] ?? <Document24Regular />);
+  }, 200);
+}
+```
+
+If the executable is not registered, CMD prints the standard Windows error message; Terminal Pro prints the Bash-style `command not found` error.
+
+---
+
+## CMD vs Terminal Pro
+
+| Feature | CMD (`Cmd.tsx`) | Terminal Pro (`Terminal.tsx`) |
+|---------|-----------------|-------------------------------|
+| Prompt format | `C:\Users\>` | `user@nexos:c:\$` |
+| Background | `#0c0c0c` (Windows black) | `#0d1117` (GitHub dark) |
+| Font | `Consolas`, `Courier New` | `Cascadia Code`, `JetBrains Mono`, `Fira Code` |
+| npm output color | Green (`#4ade80`) | Green (`#4ade80`) |
+| pnpm output color | Purple (`#a78bfa`) | Purple (`#a78bfa`) |
+| Windows-only cmds | `dir`, `ipconfig`, `systeminfo`, `tree`, `ver` | — |
+| Unix-only cmds | — | `cat`, `pwd`, `env`, `which`, `uname` |
+| Tab autocomplete | ✅ | ✅ |
+| Command history | ✅ (↑ / ↓) | ✅ (↑ / ↓) |
+| `.nex` execution | ✅ | ✅ |
+
+Both terminals share the same `NexRuntimeContext` for package management and the same `FileSystemContext` for VFS operations, so changes made in CMD (e.g., `mkdir my-project`) are immediately visible in Terminal Pro and in File Explorer.
+
+---
+
+## Example Terminal Session
+
+```bash
+# Terminal Pro — full development workflow
+user@nexos:c:\$ mkdir my-project
+Directorio creado: my-project
+
+user@nexos:c:\$ cd my-project
+user@nexos:c:\my-project\$ npm install vite react react-dom
+
+Installing packages...
+  ✓ vite@8.0.0
+  ✓ react@19.0.0
+  ✓ react-dom@19.0.0
+
+added 3 packages in 2.1s
+
+user@nexos:c:\my-project\$ ./vscode.nex
+Iniciando Visual Studio Code...
+```
+
+<Note>
+  Both CMD and Terminal Pro are simulated environments. They do not execute real system commands, access the host filesystem, make real network requests, or install actual npm packages. All operations are handled in-memory by `NexRuntimeContext` and `FileSystemContext`. The output is designed to be realistic, but no real side effects occur outside the browser sandbox.
+</Note>

@@ -1,0 +1,133 @@
+---
+title: "NEX OS Keyboard Shortcuts Reference"
+sidebarTitle: "Keyboard Shortcuts"
+description: "Complete keyboard shortcut reference for NEX OS — window management, virtual desktops, system actions, and in-app shortcuts for Notepad, VS Code, and more."
+---
+
+NEX OS supports a comprehensive set of Windows-compatible keyboard shortcuts for window management, virtual desktop navigation, system actions, and per-application commands. All global shortcuts are registered through a single `keydown` event listener in `Desktop.tsx`, keeping shortcut handling centralized and easy to extend.
+
+---
+
+## Window Management
+
+These shortcuts control the lifecycle and state of windows across the desktop. They are active at all times while the desktop is focused.
+
+| Shortcut          | Action                                                                 |
+| ----------------- | ---------------------------------------------------------------------- |
+| `Win + D`         | Minimize all open windows to the taskbar simultaneously                |
+| `Win + R`         | Open the **Run dialog** to launch apps by name or `.nex` executable    |
+| `Win + E`         | Open **File Explorer** directly                                        |
+| `Win + Tab`       | Open **Task View** — visual overview of all windows and virtual desktops |
+| `Win + Ctrl + →`  | Switch to the next virtual desktop (wraps around)                      |
+| `Win + Ctrl + ←`  | Switch to the previous virtual desktop (wraps around)                  |
+| `Alt + F4`        | Close the currently focused window                                     |
+| `Escape`          | Close Task View (when open) or dismiss the Run dialog                  |
+
+<Note>
+  In the browser context, the **Win key** maps to `metaKey` on macOS and the Windows key on Windows. NEX OS uses `e.metaKey` in its event handlers so shortcuts work on both platforms.
+</Note>
+
+---
+
+## System Shortcuts
+
+| Shortcut    | Action                                                    |
+| ----------- | --------------------------------------------------------- |
+| `Win + W`   | Open or close the **Widgets panel** (Weather, News, Stocks) |
+
+The widgets panel is toggled via `toggleWidgets()` from `useUI()`. It slides in from the left side of the desktop and can also be dismissed by clicking outside of it.
+
+---
+
+## In-App Shortcuts
+
+Many NEX OS applications register their own keyboard shortcuts internally. These are active only when the application window is focused.
+
+| Shortcut         | App                           | Action                                      |
+| ---------------- | ----------------------------- | ------------------------------------------- |
+| `Ctrl + S`       | Notepad, VS Code (Nex Code), WordPad | Save the current file               |
+| `Ctrl + Z`       | Notepad, Paint                | Undo the last action (browser-native undo)  |
+| `Ctrl + A`       | Notepad                       | Select all text in the editor               |
+| `Ctrl + C`       | All apps                      | Copy selected content                       |
+| `Ctrl + V`       | All apps                      | Paste from clipboard                        |
+| `Ctrl + Shift + P` | VS Code (Nex Code)          | Open the command palette                    |
+| `Ctrl + P`       | VS Code (Nex Code)            | Quick file open                             |
+| `` Ctrl + ` ``   | VS Code (Nex Code)            | Toggle the integrated terminal              |
+
+---
+
+## Programmatic Shortcut Handling
+
+Global shortcuts are registered once inside `Desktop.tsx` via `window.addEventListener('keydown', handleKeyDown)`. The handler is cleaned up on unmount. Key actions call the following context methods:
+
+```typescript
+import { useWindowManager } from '../context/WindowManager';
+import { useDesktop } from '../context/DesktopContext';
+import { useSettings } from '../context/SettingsContext';
+
+const { closeFocusedWindow, minimizeAllWindows, openWindow } = useWindowManager();
+const { switchDesktop, virtualDesktops, currentDesktopId } = useDesktop();
+const { isTaskViewOpen, setIsTaskViewOpen } = useSettings();
+
+// Alt + F4 → close the currently focused window
+// Internally calls closeFocusedWindow()
+
+// Win + D → minimize all windows
+// Internally calls minimizeAllWindows()
+
+// Win + Ctrl + → → switch to next desktop
+const currentIndex = virtualDesktops.findIndex(d => d.id === currentDesktopId);
+const nextIndex = (currentIndex + 1) % virtualDesktops.length;
+switchDesktop(virtualDesktops[nextIndex].id);
+```
+
+<Note>
+  `closeFocusedWindow()` targets whichever window has the highest `zIndex` at the time of the keypress — the same window that would be visually "on top". `minimizeAllWindows()` iterates over all `AppWindow` entries and sets `isMinimized: true` on each one.
+</Note>
+
+---
+
+## Run Dialog (Win + R)
+
+The Run dialog accepts both full application IDs and short `.nex` names. NEX Runtime resolves short names by appending `.nex` and searching `C:\Program Files\NEX\`.
+
+<Steps>
+  <Step title="Open the Run dialog">
+    Press `Win + R`. The dialog opens with an input field ready for a command.
+  </Step>
+  <Step title="Type an app name or .nex executable">
+    Type a registered app name (e.g. `notepad`, `vscode`, `explorer`, `controlpanel`) or a full `.nex` path like `C:\Program Files\NEX\spotify.nex`.
+  </Step>
+  <Step title="Press Enter to launch">
+    The NEX Runtime resolves the name via `resolveNex()` and calls `openWindow()` with the correct component and icon. If the app is already open, it is restored and brought to the front.
+  </Step>
+</Steps>
+
+<Tip>
+  Common short names recognized by the Run dialog include: `notepad`, `vscode`, `explorer`, `paint`, `cmd`, `terminal`, `taskmanager`, `controlpanel`, `calculator`, `calendar`, `spotify`, and `browser`. Type any of these and press Enter for an instant launch.
+</Tip>
+
+---
+
+## Adding Custom Shortcuts
+
+To register a new global shortcut, extend the `handleKeyDown` function in `Desktop.tsx`:
+
+```typescript
+const handleKeyDown = (e: KeyboardEvent) => {
+  // Existing shortcuts...
+
+  // Example: Win + N → open Notepad
+  if (e.metaKey && e.key.toLowerCase() === 'n') {
+    e.preventDefault();
+    openWindow('notepad', 'Notepad 2.0', <Document24Regular />, <Notepad />);
+  }
+};
+
+window.addEventListener('keydown', handleKeyDown);
+return () => window.removeEventListener('keydown', handleKeyDown);
+```
+
+<Note>
+  Always call `e.preventDefault()` inside shortcut handlers that override browser-native behaviors (e.g. `Ctrl + S` would otherwise trigger the browser's native save dialog). For `Win` key combinations, `e.metaKey` captures the key on both macOS and Windows.
+</Note>

@@ -1,72 +1,98 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "NEX OS",
+  "theme": "willow",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7c7c7c",
+    "light": "#050505",
+    "dark": "#d4d4d4"
   },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
+  "favicon": "https://media.brand.dev/8465b302-f653-44db-8891-07d5bd3d5b09.svg",
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/shadownrx/windows"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/shadownrx/windows"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "project-structure"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/window-manager",
+              "architecture/virtual-file-system",
+              "architecture/nex-runtime"
+            ]
+          },
+          {
+            "group": "Built-in Applications",
+            "pages": [
+              "apps/overview",
+              "apps/file-explorer",
+              "apps/terminal",
+              "apps/task-manager",
+              "apps/browser",
+              "apps/productivity"
+            ]
+          },
+          {
+            "group": "Theming & UI",
+            "pages": [
+              "theming/themes",
+              "theming/desktop",
+              "theming/keyboard-shortcuts"
+            ]
+          },
+          {
+            "group": "WebAssembly",
+            "pages": [
+              "wasm/overview",
+              "wasm/assemblyscript",
+              "wasm/rust-engine"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Hooks",
+            "pages": [
+              "api/use-window-manager",
+              "api/use-settings",
+              "api/use-file-system",
+              "api/use-desktop",
+              "api/use-ui"
+            ]
+          },
+          {
+            "group": "Extending NEX OS",
+            "pages": [
+              "api/building-apps",
+              "api/app-registry",
+              "api/wasm-hook"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

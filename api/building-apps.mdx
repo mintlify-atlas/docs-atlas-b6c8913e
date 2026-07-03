@@ -1,0 +1,162 @@
+---
+title: "Building a Custom App for NEX OS"
+sidebarTitle: "Building Apps"
+description: "Step-by-step guide to creating, registering, and launching a custom application inside NEX OS — from React component to Start Menu entry."
+---
+
+Any React component can become a NEX OS application. The system requires no boilerplate beyond two things: a component file in `src/components/apps/` and a single entry in the central `APPS` array in `src/constants/apps.tsx`. Once registered, your app automatically appears in the Start Menu, is discoverable via the Search pane, and can be launched from the File Explorer, the Run dialog (`Win+R`), and the Taskbar.
+
+<Steps>
+
+### Create the component
+
+Create a new file at `src/components/apps/MyNewApp.tsx`. Your component can use any NEX OS context hook — `useSettings` for theme and notifications, `useFileSystem` for virtual file access, `useWindowManager` to open other windows, and so on. The component doesn't need to know it's running inside a window; the `Window` HOC handles all chrome, drag, resize, and snap behavior automatically.
+
+```typescript
+import React, { useState } from 'react';
+import { useSettings } from '../../context/SettingsContext';
+
+export default function MyNewApp() {
+  const { neonTheme, addNotification } = useSettings();
+  const [count, setCount] = useState(0);
+
+  const handleClick = () => {
+    setCount(c => c + 1);
+    if (count === 9) {
+      addNotification('Achievement unlocked!', 'You clicked 10 times 🎉');
+    }
+  };
+
+  return (
+    <div style={{
+      padding: 32,
+      background: neonTheme !== 'none' ? 'rgba(0,0,0,0.8)' : '#1c1c1c',
+      height: '100%',
+      color: 'white',
+    }}>
+      <h2>Counter: {count}</h2>
+      <button onClick={handleClick}>Increment</button>
+    </div>
+  );
+}
+```
+
+<Tip>
+  Use `neonTheme` from `useSettings()` to adapt your component's background when the user switches to Cyberpunk, Matrix, or Synthwave themes.
+</Tip>
+
+### Register in `constants/apps.tsx`
+
+Open `src/constants/apps.tsx` and add an `AppItem` entry to the `APPS` array. Each entry maps a unique `id` and `appId` to an icon and a label. The `appId` is resolved by `AppRegistry` to lazy-load the actual component.
+
+```typescript
+import MyNewApp from '../components/apps/MyNewApp';
+import { Star24Regular } from '@fluentui/react-icons';
+
+// In APPS array:
+{
+  id: 'my-new-app',
+  appId: 'my-new-app',
+  icon: <Star24Regular />,
+  label: 'My App',
+  component: () => <MyNewApp />
+}
+```
+
+<Note>
+  The `id` field doubles as the window identifier used by `WindowManager`. Keep it lowercase and hyphen-separated (e.g., `my-new-app`) to match the rest of the registry.
+</Note>
+
+### Launch the app
+
+Your app now appears in the Start Menu automatically — no additional wiring required. To launch it programmatically from another component (a button, a desktop icon, a terminal command, etc.), use the `useWindowManager` hook:
+
+```typescript
+import { useWindowManager } from '../context/WindowManager';
+import { Star24Regular } from '@fluentui/react-icons';
+import MyNewApp from '../components/apps/MyNewApp';
+
+const { openWindow, windows, restoreWindow } = useWindowManager();
+
+const launch = () => {
+  const existing = windows.find(w => w.id === 'my-new-app');
+  if (existing) {
+    restoreWindow('my-new-app');
+  } else {
+    openWindow(
+      'my-new-app',
+      'My App',
+      <Star24Regular />,
+      <MyNewApp />
+    );
+  }
+};
+```
+
+<Note>
+  Always check for an existing window before calling `openWindow`. Using `restoreWindow` when a window already exists brings it to the front without reinitializing its internal React state — important for preserving user input, scroll position, and any in-progress operations.
+</Note>
+
+### (Optional) Pin to the Desktop or Taskbar
+
+To pin your app as a permanent icon on the Desktop, use `addDesktopIcon` from `useDesktop`:
+
+```typescript
+import { useDesktop } from '../context/DesktopContext';
+import { Star24Regular } from '@fluentui/react-icons';
+
+const { addDesktopIcon } = useDesktop();
+
+addDesktopIcon({
+  id: 'my-new-app',
+  label: 'My App',
+  icon: <Star24Regular />,
+});
+```
+
+To pin the app to the Taskbar permanently, set `isPinned: true` on the `AppItem` entry in `APPS`:
+
+```typescript
+{
+  id: 'my-new-app',
+  appId: 'my-new-app',
+  icon: <Star24Regular />,
+  label: 'My App',
+  isPinned: true,
+}
+```
+
+Apps with `isPinned: true` are always visible in the Taskbar's pinned apps area, even when no window is open.
+
+</Steps>
+
+## App Isolation
+
+Each application runs inside its own React scope, wrapped by the `Window` HOC defined in `src/components/Window.tsx`. The HOC provides drag, resize, snap-to-quadrant, minimize, maximize, and close controls without your component needing to implement any of that. There is no special wiring, no required lifecycle methods, and no context your component must consume — the isolation is automatic.
+
+```
+Window (HOC)
+└── Your Component
+    ├── useSettings()      ← global theme, notifications
+    ├── useFileSystem()    ← virtual file system
+    ├── useWindowManager() ← open other windows
+    └── your own state     ← fully isolated
+```
+
+## Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Memoize heavy components" icon="bolt">
+    Wrap computationally expensive apps in `React.memo` to prevent unnecessary re-renders when `WindowManager` updates the global z-index stack:
+
+    ```typescript
+    const HeavyApp = React.memo(() => {
+      // expensive renders here
+      return <div>Heavy content</div>;
+    });
+    ```
+  </Card>
+  <Card title="Choose the right icon library" icon="palette">
+    NEX OS uses **@fluentui/react-icons** for all system icons (Fluent Design, `*24Regular` / `*24Filled` variants). For additional icons, **lucide-react** is available and stylistically compatible.
+  </Card>
+</CardGroup>

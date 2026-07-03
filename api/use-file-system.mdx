@@ -1,0 +1,205 @@
+---
+title: "useFileSystem() Hook API Reference"
+sidebarTitle: "useFileSystem"
+description: "API reference for useFileSystem — read and mutate the NEX OS in-memory Virtual File System. Create files, update content, and navigate the virtual directory tree."
+---
+
+`useFileSystem` provides access to the Virtual File System (VFS) context — an in-memory file system that supports full CRUD operations without ever touching the user's real disk. Because NEX OS runs entirely in the browser, all files and folders exist only in React state, giving your applications a safe, sandboxed environment to create, read, update, and delete content just as they would on a real operating system.
+
+## Import
+
+```typescript
+import { useFileSystem } from '../context/FileSystemContext';
+```
+
+---
+
+## VirtualFile Interface
+
+Every file in the VFS is represented as a `VirtualFile` object.
+
+```typescript
+interface VirtualFile {
+  id: string;
+  name: string;
+  location: string;
+  extension: string;
+  content: string;
+  createdAt: Date;
+}
+```
+
+<ResponseField name="id" type="string">
+  Auto-generated unique identifier returned by `createFile`. Use this to reference the file in `updateFileContent` calls.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The file's display name, without the extension.
+</ResponseField>
+
+<ResponseField name="location" type="string">
+  The virtual directory path where the file lives, e.g. `'/Users/Default/Documents'`.
+</ResponseField>
+
+<ResponseField name="extension" type="string">
+  The file extension without a leading dot, e.g. `'txt'`, `'js'`, `'nex'`.
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The raw text content of the file. Binary files are represented as base64-encoded strings.
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Timestamp set when the file was created via `createFile`.
+</ResponseField>
+
+---
+
+## Properties
+
+<ResponseField name="files" type="VirtualFile[]">
+  The complete flat list of all virtual files currently in the VFS. Filter by `location` to display directory-scoped listings, or search by `extension` to find files of a specific type.
+</ResponseField>
+
+---
+
+## Methods
+
+### createFile
+
+Creates a new `VirtualFile` in the specified directory and returns the auto-generated `id` of the newly created file.
+
+<ParamField path="location" type="string" required>
+  The virtual directory path where the file should be created, e.g. `'/Users/Default/Documents'`.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Display name for the new file, without the extension.
+</ParamField>
+
+<ParamField path="ext" type="string" required>
+  File extension without a leading dot, e.g. `'txt'` or `'md'`.
+</ParamField>
+
+**Returns:** `string` — the `id` of the newly created file.
+
+---
+
+### updateFileContent
+
+Replaces the `content` field of an existing file with new text.
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the file to update. Obtain this from `createFile` or from `files.find(...)`.
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  The new content string to write into the file. Overwrites any previous value.
+</ParamField>
+
+---
+
+### navigate
+
+Updates the active `currentPath` in the File Explorer, causing it to render the contents of the target directory.
+
+<ParamField path="path" type="string" required>
+  The virtual path to navigate to, e.g. `'/Users/Default/Pictures'`.
+</ParamField>
+
+---
+
+### openFile
+
+Opens a `VirtualFile` in the appropriate system application. The VFS inspects the file's `extension` to determine which app to launch via the `WindowManager`.
+
+<ParamField path="file" type="VirtualFile" required>
+  The file object to open. Pass a reference from the `files` array directly.
+</ParamField>
+
+---
+
+### createFolder
+
+Creates a new virtual directory inside the current path.
+
+<ParamField path="name" type="string" required>
+  Display name of the new folder.
+</ParamField>
+
+---
+
+### deleteFile
+
+Removes a file or folder from the VFS by its path.
+
+<ParamField path="path" type="string" required>
+  The full virtual path of the file or folder to delete, e.g. `'/Users/Default/Documents/notes.txt'`.
+</ParamField>
+
+<Warning>
+  Deleting a folder is **recursive** — all files and subfolders inside it are permanently removed from the VFS. There is no recycle bin recovery at the context level; implement your own undo logic before calling this if you need it.
+</Warning>
+
+---
+
+### getFileContent
+
+Reads and returns the content of a file at the given path without opening it in a window.
+
+<ParamField path="path" type="string" required>
+  Full virtual path of the file to read.
+</ParamField>
+
+**Returns:** `string | Buffer` — the file's raw content, or a `Buffer` for binary files.
+
+---
+
+## Usage Example
+
+The following example shows how `Notepad` uses `useFileSystem` to load an existing file's content and autosave changes on blur.
+
+```typescript
+import { useFileSystem } from '../../context/FileSystemContext';
+
+export const Notepad = ({ fileId }: { fileId?: string }) => {
+  const { files, updateFileContent } = useFileSystem();
+  const file = files.find(f => f.id === fileId);
+
+  const handleSave = (text: string) => {
+    if (fileId) updateFileContent(fileId, text);
+  };
+
+  return (
+    <textarea
+      defaultValue={file?.content}
+      onBlur={e => handleSave(e.target.value)}
+    />
+  );
+};
+```
+
+---
+
+## Virtual Directory Tree
+
+The VFS is pre-seeded with a familiar directory structure on startup:
+
+```
+/
+├── Users/
+│   └── Default/
+│       ├── Documents/
+│       ├── Downloads/
+│       └── Pictures/
+├── Program Files/
+└── Windows/
+```
+
+<Note>
+  The VFS is entirely sandboxed in browser memory — there is no access to the user's real filesystem. This is a deliberate security boundary enforced by the browser. All file data is lost on a hard page refresh unless you build persistence on top of `localStorage` or `IndexedDB`.
+</Note>
+
+<Tip>
+  When building an app that creates files programmatically, store the `id` returned by `createFile` in your component's state. This is the most reliable way to reference the file later for updates — path-based lookups can break if a file is moved.
+</Tip>

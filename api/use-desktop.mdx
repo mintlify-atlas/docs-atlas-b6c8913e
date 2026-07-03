@@ -1,0 +1,156 @@
+---
+title: "useDesktop() Hook API Reference"
+sidebarTitle: "useDesktop"
+description: "API reference for useDesktop — manage desktop icons, drag-and-drop positioning, icon sorting, and virtual desktop workspaces in NEX OS."
+---
+
+`useDesktop` manages the desktop icon layer and virtual desktop workspaces — add, update, remove, and sort icons, and switch between multiple independent desktop environments. Each virtual desktop maintains its own icon set and window scope, giving users a clean separation between different workflows, just like virtual desktops on a native OS.
+
+## Import
+
+```typescript
+import { useDesktop } from '../context/DesktopContext';
+```
+
+---
+
+## DesktopIcon Interface
+
+Each shortcut on the desktop is represented as a `DesktopIcon` object.
+
+```typescript
+interface DesktopIcon {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  position: { x: number; y: number };
+  appId: string;
+}
+```
+
+<ResponseField name="id" type="string">
+  Unique identifier for this desktop shortcut. Used as the key for all update and remove operations.
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  The display label shown beneath the icon on the desktop.
+</ResponseField>
+
+<ResponseField name="icon" type="ReactNode">
+  The visual icon rendered for this shortcut. Typically a Fluent UI icon component (e.g. `<Star24Regular />`).
+</ResponseField>
+
+<ResponseField name="position" type="{ x: number; y: number }">
+  The pixel coordinates of the icon on the desktop canvas. Updated on every drag-and-drop interaction via `updateDesktopIcon`.
+</ResponseField>
+
+<ResponseField name="appId" type="string">
+  The `id` of the registered application this shortcut launches. Must match an entry in `src/constants/apps.tsx`.
+</ResponseField>
+
+---
+
+## Methods
+
+### addDesktopIcon
+
+Adds a new shortcut icon to the currently active virtual desktop.
+
+<ParamField path="icon" type="Partial<DesktopIcon>" required>
+  A partial `DesktopIcon` object. At minimum, provide `id`, `label`, `appId`, and `position`. The `icon` (ReactNode) is optional but strongly recommended for visual clarity.
+</ParamField>
+
+---
+
+### updateDesktopIcon
+
+Updates one or more properties of an existing desktop icon. Primarily used by the drag-and-drop system to persist new positions, but can also update labels or icons programmatically.
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the icon to update.
+</ParamField>
+
+<ParamField path="changes" type="Partial<DesktopIcon>" required>
+  An object containing only the fields to change. Unspecified fields retain their current values.
+</ParamField>
+
+---
+
+### removeDesktopIcon
+
+Removes a shortcut from the active desktop permanently.
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the icon to remove.
+</ParamField>
+
+---
+
+### sortDesktopIcons
+
+Rearranges all icons on the active desktop according to the specified sort order, snapping them into a clean grid layout.
+
+<ParamField path="by" type="'name' | 'type' | 'position'" required>
+  The sort criterion to apply.
+  - `'name'` — alphabetical order by `label`
+  - `'type'` — grouped by file extension or app category
+  - `'position'` — sorted by current `x`/`y` coordinates (top-to-bottom, left-to-right)
+</ParamField>
+
+---
+
+### switchDesktop
+
+Switches the active virtual desktop to the one identified by `desktopId`. Windows belonging to other desktops are hidden; windows on the target desktop become visible.
+
+<ParamField path="desktopId" type="string" required>
+  The identifier of the virtual desktop to switch to.
+</ParamField>
+
+---
+
+### addDesktop
+
+Creates a brand-new empty virtual desktop and switches to it. The new desktop starts with no icons and no open windows. No parameters required.
+
+---
+
+## Usage Example
+
+```typescript
+import { useDesktop } from '../context/DesktopContext';
+import { Star24Regular } from '@fluentui/react-icons';
+
+const { addDesktopIcon, sortDesktopIcons } = useDesktop();
+
+// Add a new shortcut to the desktop
+addDesktopIcon({
+  id: 'my-app-shortcut',
+  label: 'My App',
+  icon: <Star24Regular />,
+  position: { x: 100, y: 100 },
+  appId: 'my-app',
+});
+
+// Sort all icons alphabetically
+sortDesktopIcons('name');
+```
+
+---
+
+## Virtual Desktops
+
+NEX OS supports multiple independent virtual desktops, each with its own icon set and window group. This mirrors the virtual desktop feature found in Windows 11 and macOS Mission Control.
+
+- **Switching desktops** — Use `switchDesktop(desktopId)` programmatically, or press **Win+Ctrl+←** / **Win+Ctrl+→** to cycle through desktops using the built-in keyboard shortcuts.
+- **Creating desktops** — `addDesktop()` provisions a new empty workspace and immediately activates it.
+- **Window scoping** — Each `AppWindow` in `useWindowManager` carries a `desktopId` field. The `Desktop` renderer only displays windows whose `desktopId` matches the currently active desktop.
+- **Task View** — Pressing **Win+Tab** opens the `TaskView` overlay (managed via `useSettings`), which shows thumbnails of all virtual desktops for quick navigation.
+
+<Tip>
+  When adding a desktop icon for a new app, make sure the `appId` you pass matches an `id` registered in `src/constants/apps.tsx`. The launcher logic reads that registry to instantiate the correct component when the icon is double-clicked.
+</Tip>
+
+<Note>
+  Desktop icon positions are stored in `DesktopContext` state. If you need positions to survive page refreshes, consider syncing `position` changes to `localStorage` in your own layer — the context itself is in-memory only.
+</Note>

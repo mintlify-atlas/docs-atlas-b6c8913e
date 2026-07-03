@@ -1,0 +1,202 @@
+---
+title: "NEX OS Themes: Neon Cyberpunk, Matrix, and Synthwave"
+sidebarTitle: "Themes"
+description: "NEX OS supports light/dark base themes plus three neon overlays — Cyberpunk, Matrix, and Synthwave — each with unique Three.js 3D backgrounds and CSS glow effects."
+---
+
+NEX OS ships with a layered theming system: a base **light/dark** mode that controls the OS chrome and window surfaces, plus optional **neon overlay themes** that radically transform the entire visual experience — replacing window borders, accent colors, font rendering, border-radius, and the desktop background with immersive Three.js 3D scenes powered by `@react-three/fiber`.
+
+---
+
+## Base Themes
+
+NEX OS defaults to `dark` mode. The base theme is stored per-user in `SettingsContext` and persisted automatically to `localStorage`. Toggling between light and dark applies immediately via the `data-theme` attribute on `<html>`.
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+
+const { theme, toggleTheme } = useSettings();
+
+// theme is 'light' | 'dark'
+toggleTheme(); // Switches between 'dark' and 'light'
+```
+
+The two base values map to dedicated CSS rule sets in `src/index.css`:
+
+| Value   | Background token | Description                              |
+| ------- | ---------------- | ---------------------------------------- |
+| `dark`  | `#1c1c1c`        | Default OS appearance with dark surfaces |
+| `light` | `#f3f3f3`        | High-contrast light surfaces             |
+
+<Note>
+  In light mode the system accent automatically shifts to `#0067c0` (Windows blue) to maintain WCAG contrast ratios. This override is applied directly in the `:root[data-theme='light']` block.
+</Note>
+
+---
+
+## Neon Overlay Themes
+
+Neon themes layer on top of the base theme and are tracked separately in `neonTheme`. When a neon theme is active, the `data-neon` attribute is set on `<html>` and the corresponding CSS custom properties take effect throughout the entire OS.
+
+### Type Definitions
+
+```typescript
+type NeonTheme = 'none' | 'cyberpunk' | 'matrix' | 'synthwave';
+type BaseTheme = 'light' | 'dark';
+```
+
+### Available Neon Themes
+
+<CardGroup cols={2}>
+  <Card title="none" icon="circle-minus">
+    The default state. Standard OS appearance is used with no neon effects, no 3D background, and the accent color set by `accentColor` (default `#60cdff`).
+  </Card>
+  <Card title="cyberpunk" icon="bolt">
+    A pink/cyan palette with sharp `border-radius: 0`, magenta neon window borders, and cyan point lights. The `CyberpunkBG.tsx` Three.js scene fills the desktop with floating octahedral geometries and a star field.
+  </Card>
+  <Card title="matrix" icon="terminal">
+    A deep-green monochrome palette that switches the OS font to `Courier New`. The `MatrixBG.tsx` scene renders 40 falling character streams in real time at `#00ff41`. Window borders glow green.
+  </Card>
+  <Card title="synthwave" icon="wave-square">
+    A retro purple/pink palette with `border-radius: 12px` and a `#f92aad` accent. The `SynthwaveBG.tsx` Three.js scene features an infinite wireframe grid floor, a glowing `#f92aad` sun, and sparkle particles.
+  </Card>
+</CardGroup>
+
+---
+
+## Applying Themes Programmatically
+
+Both the base theme and the neon overlay are exposed from `useSettings()`. The example below shows how a component can toggle the base theme, apply a neon overlay, and fire a system notification — the same pattern used inside `ControlPanel.tsx`.
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+
+const { toggleTheme, setNeonTheme, addNotification } = useSettings();
+
+// Toggle between light and dark
+toggleTheme();
+
+// Apply a neon overlay
+setNeonTheme('cyberpunk');
+addNotification('Theme activated', 'Cyberpunk mode enabled 🟣');
+
+// Remove the neon overlay and return to standard appearance
+setNeonTheme('none');
+```
+
+<Tip>
+  All settings calls are persisted automatically to `localStorage` under the current user's profile via `SettingsContext`. No manual save step is required.
+</Tip>
+
+---
+
+## CSS Custom Properties
+
+Every neon theme injects its own set of CSS custom properties at the `:root` level. These variables cascade to every component in the OS — window frames, taskbar, notification toasts, start menu, and desktop icons.
+
+```css
+/* Default accent (no neon theme) */
+:root {
+  --win-accent: #60cdff;
+}
+
+/* Cyberpunk overlay */
+:root[data-neon='cyberpunk'] {
+  --win-accent: #ff00ff;
+  --win-blue: #00ffff;
+  --neon-glow: 0 0 10px rgba(255, 0, 255, 0.8), 0 0 20px rgba(255, 0, 255, 0.4);
+  --win-radius: 0px;
+  --win-bg: #050505;
+}
+
+/* Matrix overlay */
+:root[data-neon='matrix'] {
+  --win-accent: #00ff41;
+  --win-blue: #003b00;
+  --neon-glow: 0 0 10px rgba(0, 255, 65, 0.8);
+  --win-radius: 4px;
+  --win-bg: #000c00;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* Synthwave overlay */
+:root[data-neon='synthwave'] {
+  --win-accent: #f92aad;
+  --win-blue: #7214fc;
+  --neon-glow: 0 0 15px rgba(249, 42, 173, 0.6);
+  --win-radius: 12px;
+  --win-bg: #2d0b5a;
+}
+```
+
+Two utility classes are provided to consume these variables in any component:
+
+```css
+/* Applies the neon glow border to any element */
+.neon-border {
+  border: 1px solid var(--win-accent) !important;
+  box-shadow: var(--neon-glow);
+}
+
+/* Applies glow to text */
+.neon-text {
+  color: var(--win-accent) !important;
+  text-shadow: var(--neon-glow);
+}
+```
+
+---
+
+## Accent Color
+
+The `accentColor` property controls the global accent used by buttons, highlights, and interactive elements when no neon theme is active. It defaults to `#60cdff` and is applied directly as a CSS custom property.
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+
+const { accentColor, setAccentColor } = useSettings();
+
+// Change the system accent color
+setAccentColor('#ff6b35');
+```
+
+The value is written straight to `document.documentElement.style.setProperty('--win-accent', accentColor)` on every change, giving instant visual feedback without a page reload.
+
+<Note>
+  When a neon theme is active, `--win-accent` is overridden by the neon theme's CSS rule. The stored `accentColor` value is preserved and will be restored when `setNeonTheme('none')` is called.
+</Note>
+
+---
+
+## 3D Backgrounds
+
+Each neon theme is paired with a dedicated Three.js scene rendered by `Background3D.tsx` (located at `src/components/system/Background3D.tsx`). The orchestrator reads `neonTheme` from `useSettings()` and lazily mounts the correct scene inside a `<Canvas>` element with `@react-three/fiber`.
+
+| Neon Theme   | Component                                    | Key Visual Elements                                                      |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------------ |
+| `cyberpunk`  | `src/components/system/3d/CyberpunkBG.tsx`   | 15 floating octahedra (magenta/cyan), star field, `MeshDistortMaterial`  |
+| `matrix`     | `src/components/system/3d/MatrixBG.tsx`      | 40 falling character streams (`#00ff41`), `@react-three/drei` `<Text>`   |
+| `synthwave`  | `src/components/system/3d/SynthwaveBG.tsx`   | Infinite wireframe grid, `#f92aad` sun, purple glow halo, `<Sparkles>`  |
+
+The `Background3D` component includes two automatic performance optimizations:
+
+<Steps>
+  <Step title="Reduced Motion Check">
+    If the user's OS has `prefers-reduced-motion: reduce` set, the WebGL canvas is replaced with a static CSS `radial-gradient` fallback to avoid triggering vestibular disorders.
+  </Step>
+  <Step title="Low-End Device Detection">
+    If `navigator.hardwareConcurrency` is 2 or fewer, the 3D canvas is skipped entirely and the static gradient fallback is shown, preventing frame drops on older or mobile hardware.
+  </Step>
+</Steps>
+
+The `<Canvas>` is configured with `dpr={[1, 2]}` for Retina displays and `powerPreference: "high-performance"` to request the discrete GPU on machines with dual graphics.
+
+---
+
+## Changing Themes via Control Panel
+
+End users can switch themes visually through the built-in **Control Panel** app (`src/components/apps/ControlPanel.tsx`). It exposes a theme picker for neon overlays and an accent color swatch selector — both wired directly to `setNeonTheme()` and `setAccentColor()` from `useSettings()`.
+
+<Tip>
+  Open Control Panel from the Start Menu or by running `controlpanel` in the **Run dialog** (`Win + R`). Changes take effect instantly and survive page refreshes thanks to per-user `localStorage` persistence.
+</Tip>

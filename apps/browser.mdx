@@ -1,0 +1,126 @@
+---
+title: "NexBrowser Pro: Integrated Web Browser in NEX OS"
+sidebarTitle: "Browser"
+description: "NexBrowser Pro is the built-in browser for NEX OS, featuring YouTube video playback, per-tab history, private mode, and a predefined list of compatible URLs."
+---
+
+NexBrowser Pro (`BrowserApp.tsx`) is the integrated web browser that runs inside a NEX OS window. Styled after Google Chrome, it provides a full multi-tab browsing experience complete with an omnibar, bookmarks bar, per-tab navigation history, YouTube video playback, and Google Slides presentation embedding. Tab state — including the complete per-tab history stack — is persisted to `localStorage` under the key `nex_browser_tabs_v3`, so your open tabs survive a page refresh.
+
+---
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Tab Browsing" icon="browser">
+    Open, close, and switch between unlimited tabs. Each tab maintains its own independent navigation history stack, favicon, and title. Tabs persist across sessions via `localStorage`.
+  </Card>
+  <Card title="YouTube Video Playback" icon="play">
+    YouTube videos are embedded using `youtube-nocookie.com` iframe embeds. The video continues playing even when you switch to a different tab or move the browser window, because all tab iframes are mounted simultaneously and hidden with CSS rather than unmounted.
+  </Card>
+  <Card title="Per-Tab History" icon="clock-rotate-left">
+    Each tab tracks its full navigation history as an indexed stack of `HistoryEntry` objects. Back and forward navigation move through this per-tab stack without affecting other tabs.
+  </Card>
+  <Card title="Bookmarks Bar" icon="bookmark">
+    A persistent bookmarks bar sits below the toolbar. Default bookmarks include Google, YouTube, Google Slides, and GitHub. Add or remove bookmarks using the star icon in the omnibar. Bookmarks persist via `localStorage`.
+  </Card>
+  <Card title="Google Slides Support" icon="presentation-screen">
+    Paste a Google Slides URL (`docs.google.com/presentation/d/…/edit`) to embed the presentation directly. Toggle between slide view mode and fullscreen presentation mode using the toolbar buttons.
+  </Card>
+  <Card title="Address Bar Navigation" icon="magnifying-glass">
+    The omnibar accepts full URLs and plain search queries. HTTPS URLs show a lock icon (`LockClosed16Regular`); non-secure URLs show an info icon. The progress bar animates during page load.
+  </Card>
+</CardGroup>
+
+---
+
+## Persistent Iframe Architecture
+
+One of NexBrowser Pro's most important engineering decisions is how it handles multiple tabs with active content. All tab iframes are rendered simultaneously in the DOM — one per tab that has a loaded URL. The active tab's iframe is visible; all others are hidden with `display: none`. This means:
+
+- **YouTube keeps playing** when you switch tabs, because the iframe is never unmounted.
+- **No reload on tab switch** — the browser does not re-fetch the page when you return to a tab.
+- **State is preserved** — forms, scroll positions, and video playback progress survive tab switches.
+
+```typescript
+// BrowserApp.tsx — persistent iframe layer
+{tabs
+  .filter((t) => t.iframeUrl)
+  .map((t) => (
+    <iframe
+      key={t.id}
+      src={t.iframeUrl}
+      title={t.title}
+      style={{
+        display: t.id === activeTabId && !blocked && !showYoutubeSearch
+          ? 'block'
+          : 'none',  // Hidden, but NOT unmounted
+      }}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media;
+             fullscreen; picture-in-picture; presentation"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups
+               allow-popups-to-escape-sandbox allow-presentation allow-downloads"
+    />
+  ))}
+```
+
+<Tip>
+  YouTube playback continues even when you switch focus to another NEX OS window, minimise the browser, or snap it to a side of the screen. The iframe runs in its own browsing context and is not throttled by NEX OS window focus changes.
+</Tip>
+
+---
+
+## YouTube Search Integration
+
+When you navigate to `youtube.com` in NexBrowser Pro, the browser detects that YouTube's homepage cannot be embedded in an iframe (due to `X-Frame-Options` restrictions) and automatically renders the built-in `YouTubeSearch` component instead. This component connects to the `/api/youtube/search` endpoint (available in development) and lets you search for videos and playlists. Selecting a result loads the `youtube-nocookie.com` embed URL directly into the active tab's iframe.
+
+```typescript
+// BrowserApp.tsx — YouTube detection
+const showYoutubeSearch =
+  !!currentTab.displayUrl &&
+  isYouTube(currentTab.displayUrl) &&
+  !currentTab.iframeUrl;
+
+// Renders <YouTubeSearch> overlay when true
+```
+
+---
+
+## URL Resolution via `browserUrls.ts`
+
+All URL navigation passes through the `resolveBrowserUrl()` function from `src/utils/browserUrls.ts`. This utility:
+
+1. Detects whether the URL is a YouTube link and converts it to a `youtube-nocookie.com` embed URL.
+2. Detects Google Slides URLs and converts them to the embedded `/embed` or `/present` format.
+3. Detects Google Docs and Sheets and generates appropriate embed URLs.
+4. Checks whether the domain is in the blocked-by-iframe list (`isBlockedByIframe()`).
+5. Resolves a `titleHint` for the tab title and a `favicon` URL.
+
+```typescript
+// Usage in BrowserApp.tsx
+const resolved = resolveBrowserUrl(trimmed, {
+  slidesMode: isGoogleSlides(trimmed) ? 'embed' : undefined,
+});
+
+// resolved.iframeUrl  → the actual src for the <iframe>
+// resolved.displayUrl → shown in the omnibar
+// resolved.titleHint  → shown as the tab title
+// resolved.contentType → 'youtube' | 'slides' | 'docs' | 'sheets' | 'generic'
+```
+
+---
+
+## Internet Explorer (Retro App)
+
+NEX OS also includes `IEApp.tsx` — a separate, nostalgic Internet Explorer–style browser. It uses the classic IE toolbar layout, the blue `e` logo, and the characteristic IE navigation UI. Like NexBrowser Pro, it runs inside a NEX OS window and supports embedding compatible URLs. It is available as a standalone app from the Start Menu and can be launched with `./ie.nex` from either terminal.
+
+---
+
+## Browser Limitations
+
+<Note>
+  NexBrowser Pro runs websites inside an `<iframe>` within a NEX OS window, which is itself running inside your real browser. This means:
+
+  - Sites that send `X-Frame-Options: DENY` or `Content-Security-Policy: frame-ancestors 'none'` cannot be embedded and will show the **"Cannot display this site"** error card with an option to open in your real browser.
+  - Cross-origin JavaScript communication between the NEX OS application and the embedded site is restricted by standard browser same-origin policies.
+  - YouTube videos where the owner has disabled embedding will show an error overlay inside the player, detectable via the YouTube IFrame Player API `postMessage` event codes `101` and `150`.
+</Note>

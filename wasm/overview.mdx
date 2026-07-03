@@ -1,0 +1,113 @@
+---
+title: "WebAssembly in NEX OS: Performance at Near-Native Speed"
+sidebarTitle: "Overview"
+description: "NEX OS uses WebAssembly modules (AssemblyScript and Rust) for CPU-intensive tasks like system metrics — achieving up to 100x faster calculations than pure JavaScript."
+---
+
+When NEX OS runs real-time operations like Task Manager metrics or audio normalization, JavaScript alone is not enough. The JavaScript main thread can saturate quickly when performing complex calculations every few milliseconds, causing the UI to stutter or freeze. To solve this, NEX OS delegates those CPU-intensive operations to **WebAssembly (WASM)** — compiled binary code that executes at near-native speed inside the browser, without blocking the React rendering pipeline.
+
+## Why WebAssembly?
+
+JavaScript is a dynamic, garbage-collected language, which means it occasionally pauses execution to free memory. For applications that demand consistent, low-latency throughput — like polling system metrics 60 times per second — those pauses are unacceptable. WASM sidesteps this entirely: it runs pre-compiled binary, has no garbage collector, and communicates with JavaScript through a lean, efficient bridge.
+
+### Performance Comparison
+
+| Operation | JavaScript | WASM | Improvement |
+|---|---|---|---|
+| Process 1M numbers | 150 ms | 1.5 ms | **100x** |
+| Process dataset | 50 ms | 0.5 ms | **100x** |
+
+### WASM Advantages
+
+<CardGroup cols={2}>
+  <Card title="Fast Execution" icon="bolt">
+    Code is compiled to binary and runs at near-native CPU speed — no interpretation overhead.
+  </Card>
+  <Card title="Deterministic" icon="clock">
+    No garbage collector pauses. Calculations always complete in predictable time.
+  </Card>
+  <Card title="Non-Blocking" icon="arrow-right-arrow-left">
+    WASM runs off the main JavaScript thread, so the UI stays fully responsive.
+  </Card>
+  <Card title="Low Overhead" icon="gauge">
+    The JS ↔ WASM bridge is extremely efficient, minimizing round-trip cost.
+  </Card>
+</CardGroup>
+
+<Note>
+  The compiled `process_utils.wasm` binary is approximately **~50 KB** — small enough to be cached immediately by the browser's service worker on the first load.
+</Note>
+
+---
+
+## Two WASM Engines in NEX OS
+
+NEX OS ships two complementary WebAssembly modules, each suited to a different authoring style and use case:
+
+### AssemblyScript — `assembly/index.ts`
+
+AssemblyScript uses TypeScript-like syntax and compiles directly to WebAssembly using the `asc` compiler. This makes it the most approachable option for TypeScript developers already familiar with the NEX OS codebase. The source lives in `assembly/index.ts` and is rebuilt with a single command:
+
+```bash
+npm run build:as
+```
+
+This produces `public/process_utils.wasm` and the accompanying `public/process_utils.js` ESM wrapper. See [AssemblyScript Module](/wasm/assemblyscript) for the full authoring and compilation guide.
+
+### Rust — `wasm-engine/src/lib.rs`
+
+The Rust WASM engine provides the full power of a systems programming language: ownership, lifetimes, traits, and access to crates from the Rust ecosystem. It is used for more complex operations including the C++ transpiler that backs the **Dev-C++ 2026** application. See [Rust Engine](/wasm/rust-engine) for details.
+
+---
+
+## Where WASM Is Used in NEX OS
+
+WASM is not used everywhere — only in places where JavaScript performance is genuinely insufficient.
+
+| Feature | Module | Functions Used |
+|---|---|---|
+| **Task Manager** — real-time CPU/memory metrics | AssemblyScript | `calculateLoad`, `getRank` |
+| **Audio processing** | AssemblyScript | `normalizeAudio` |
+| **Dev-C++ 2026** — C++ transpiler | Rust | `wasm-engine/src/lib.rs` |
+| **Process management** | Rust | `wasm-engine/src/lib.rs` |
+
+---
+
+## The `useWasmEngine` Hook
+
+All WASM consumption in NEX OS goes through the `useWasmEngine` hook located at `src/utils/useWasmEngine.ts`. This hook handles module loading asynchronously and provides an **automatic JavaScript fallback** — if the browser cannot load the WASM binary for any reason, the hook transparently switches to a pure-JS implementation of the same functions.
+
+```typescript
+import { useWasmEngine } from '../utils/useWasmEngine';
+
+const { isReady, isWasm, calculateLoad, getRank } = useWasmEngine();
+
+if (!isReady) return <div>Loading...</div>;
+
+const load = calculateLoad(0.7, 0.4, 0.2);
+const rank = getRank(load);
+// isWasm tells you whether WASM or the JS fallback is active
+```
+
+<Tip>
+  The `isWasm` boolean is useful during development and debugging — log it to confirm your browser loaded the binary successfully instead of silently falling back to JavaScript.
+</Tip>
+
+<Warning>
+  Always guard on `isReady` before calling `calculateLoad` or `getRank`. The WASM module loads asynchronously on mount; calling these functions before the module is ready will throw a runtime error.
+</Warning>
+
+---
+
+## Next Steps
+
+Dive into the implementation details for each engine:
+
+<CardGroup cols={2}>
+  <Card title="AssemblyScript Module" icon="code" href="/wasm/assemblyscript">
+    Write and compile TypeScript-like WASM functions. Covers types, the build pipeline, React integration, and limitations.
+  </Card>
+  <Card title="Rust Engine" icon="gear" href="/wasm/rust-engine">
+    Explore the Rust WASM engine powering complex operations like the C++ transpiler and process management.
+  </Card>
+</CardGroup>

@@ -1,0 +1,219 @@
+---
+title: "Desktop Configuration: Wallpaper, Icons, and Virtual Desktops"
+sidebarTitle: "Desktop"
+description: "Configure the NEX OS desktop with custom wallpapers, desktop icon layout, snap zones, and multiple virtual workspaces managed by DesktopContext."
+---
+
+The NEX OS desktop is managed by two cooperating contexts — `DesktopContext` for icons and virtual workspaces, and `SettingsContext` for wallpaper and system-wide visual state. Together they expose a fully configurable workspace that supports custom wallpapers, freely positioned and sortable desktop icons, Windows 11-style snap zones, multiple virtual desktops, a widgets panel, and a system tray with live hardware toggles.
+
+---
+
+## Wallpaper
+
+The desktop wallpaper is stored as a URL string inside the current user's profile in `SettingsContext`. Any publicly reachable image URL is accepted.
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+
+const { wallpaper, setWallpaper } = useSettings();
+
+// Set a custom wallpaper
+setWallpaper('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974');
+
+// Or any other URL
+setWallpaper('https://example.com/my-wallpaper.jpg');
+```
+
+The default wallpaper is an Unsplash photo (`https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974`). When a neon theme is active, the `Background3D` component renders above the wallpaper layer, so the wallpaper acts as a subtle base beneath the 3D scene.
+
+<Note>
+  Wallpaper changes are persisted per-user in `localStorage`. Each user profile independently stores its own wallpaper, theme, accent color, and night light preference.
+</Note>
+
+---
+
+## Desktop Icons
+
+Desktop icons are managed by `useDesktop()` from `DesktopContext`. Each icon records an absolute `x`/`y` pixel position and can target a registered application via `appId`.
+
+```typescript
+import { useDesktop } from '../context/DesktopContext';
+
+const {
+  desktopIcons,
+  addDesktopIcon,
+  updateDesktopIcon,
+  removeDesktopIcon,
+  sortDesktopIcons,
+} = useDesktop();
+```
+
+### Icon Management Methods
+
+| Method               | Parameters                          | Description                                                     |
+| -------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| `addDesktopIcon`     | `icon: Omit<DesktopIcon, 'id'>`     | Adds a new icon at the specified `x`/`y` coordinates.           |
+| `updateDesktopIcon`  | `id: string, updates: Partial<DesktopIcon>` | Updates any icon property — position, title, or `appId`.  |
+| `removeDesktopIcon`  | `id: string`                        | Permanently removes an icon from the desktop.                   |
+| `sortDesktopIcons`   | `by: 'name' \| 'type' \| 'position'` | Re-orders all icons alphabetically, by type, or by grid position.|
+
+### Icon Type
+
+```typescript
+interface DesktopIcon {
+  id: string;
+  title: string;
+  icon: ReactNode;           // Fluent UI icon component
+  type: 'file' | 'folder' | 'system';
+  appId?: string;            // Links to a registered app in APPS constant
+  appProps?: AppProps;       // Optional props passed to the app on launch
+  x: number;                 // Absolute pixel X position
+  y: number;                 // Absolute pixel Y position
+}
+```
+
+### Drag-and-Drop Repositioning
+
+Icons support free-form drag-and-drop directly on the desktop canvas. The `Desktop.tsx` component listens to `mousedown`, `mousemove`, and `mouseup` events to track drag state and calls `updateDesktopIcon(id, { x: newX, y: newY })` on every move frame — giving smooth, pixel-accurate repositioning with a minimum clamp of `10px` from the desktop edge.
+
+<Tip>
+  Right-click the desktop to access a context menu with quick actions including **Sort by name**, **Sort by type**, **New file**, and **Toggle widgets panel**.
+</Tip>
+
+---
+
+## Virtual Desktops
+
+NEX OS ships with three virtual desktops out of the box (`Escritorio 1`, `Escritorio 2`, `Escritorio 3`). Each desktop maintains an independent set of open windows — windows are filtered by `desktopId` when rendering.
+
+```typescript
+import { useDesktop } from '../context/DesktopContext';
+
+const { virtualDesktops, currentDesktopId, switchDesktop, addDesktop } = useDesktop();
+
+// Switch to a specific desktop by ID
+switchDesktop('desktop-2');
+
+// Create a new empty virtual desktop
+addDesktop(); // Appends 'desktop-N' and switches to it automatically
+```
+
+### Virtual Desktop Keyboard Shortcuts
+
+| Shortcut              | Action                                  |
+| --------------------- | --------------------------------------- |
+| `Win + Tab`           | Open Task View — see all desktops and windows at a glance |
+| `Win + Ctrl + →`      | Switch to the next virtual desktop (wraps around) |
+| `Win + Ctrl + ←`      | Switch to the previous virtual desktop (wraps around) |
+| `Escape`              | Close Task View                         |
+
+The desktop switcher wraps — pressing `Win + Ctrl + →` on the last desktop loops back to the first. The switch is handled directly in `Desktop.tsx` via `window.addEventListener('keydown', ...)`, calling `switchDesktop()` after computing the next index modulo `virtualDesktops.length`.
+
+<Note>
+  **Task View** (`Win + Tab`) is rendered by `src/components/system/TaskView.tsx`. It provides a visual overview of all virtual desktops and all currently open windows, allowing windows to be dragged between desktops.
+</Note>
+
+---
+
+## Snap Layouts
+
+NEX OS implements Windows 11-style window snapping with six snap zones. Snapping is performed by calling `snapWindow(id, direction)` from `useWindowManager()`, which instantly positions and sizes the window to fill its designated screen zone.
+
+### Snap Positions
+
+| Direction      | Screen Zone                    |
+| -------------- | ------------------------------ |
+| `left`         | Left half of the screen        |
+| `right`        | Right half of the screen       |
+| `top-left`     | Top-left quadrant              |
+| `top-right`    | Top-right quadrant             |
+| `bottom-left`  | Bottom-left quadrant           |
+| `bottom-right` | Bottom-right quadrant          |
+
+```typescript
+import { useWindowManager } from '../context/WindowManager';
+
+const { snapWindow, maximizeWindow } = useWindowManager();
+
+// Snap a window to the left half
+snapWindow('my-app-id', 'left');
+
+// Maximize — automatically saves the pre-maximize size to savedSize
+maximizeWindow('my-app-id', { width: 800, height: 600, x: 100, y: 50 });
+```
+
+The `savedSize` field on `AppWindow` stores the `{ width, height, x, y }` snapshot taken before snapping or maximizing. When the window is unsnapped or restored, `savedSize` is used for a pixel-perfect restore — preventing the common UX problem of windows expanding to an unexpected size after unsnapping.
+
+```typescript
+interface AppWindow {
+  // ...
+  snap?: 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'none';
+  /** Saved dimensions before maximize/snap, for precise restore */
+  savedSize?: { width: number; height: number; x: number; y: number };
+}
+```
+
+---
+
+## Widgets Panel
+
+The widgets panel slides in from the left side of the desktop and is toggled with `Win + W` or the widgets button in the taskbar. It is managed by `useUI()` from `UIContext`.
+
+```typescript
+import { useUI } from '../context/UIContext';
+
+const { isWidgetsOpen, toggleWidgets, closeWidgets } = useUI();
+
+toggleWidgets(); // Opens or closes the panel
+```
+
+The panel hosts three live widgets rendered in `src/components/system/WidgetsPanel.tsx`:
+
+<CardGroup cols={3}>
+  <Card title="WeatherWidget" icon="cloud-sun">
+    Current conditions, temperature, and forecast. Located at `src/components/system/widgets/WeatherWidget.tsx`.
+  </Card>
+  <Card title="NewsWidget" icon="newspaper">
+    Latest headlines feed. Located at `src/components/system/widgets/NewsWidget.tsx`.
+  </Card>
+  <Card title="StocksWidget" icon="chart-line">
+    Live stock tickers and price changes. Located at `src/components/system/widgets/StocksWidget.tsx`.
+  </Card>
+</CardGroup>
+
+---
+
+## System Tray
+
+The system tray lives in the bottom-right corner of the taskbar and provides quick toggles for the most common system states. All values come from `useSettings()`.
+
+| Toggle           | Property               | Default |
+| ---------------- | ---------------------- | ------- |
+| Wi-Fi            | `isWifiEnabled`        | `true`  |
+| Bluetooth        | `isBluetoothEnabled`   | `true`  |
+| Night Light      | `isNightLightEnabled`  | `false` |
+| Volume slider    | `volume` (0–100)       | `50`    |
+| Brightness slider| `brightness` (0–100)   | `100`   |
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+
+const {
+  isWifiEnabled, setIsWifiEnabled,
+  isBluetoothEnabled, setIsBluetoothEnabled,
+  isNightLightEnabled, setIsNightLightEnabled,
+  volume, setVolume,
+  brightness, setBrightness,
+} = useSettings();
+
+// Toggle night light
+setIsNightLightEnabled(!isNightLightEnabled);
+```
+
+### Night Light Mode
+
+When `isNightLightEnabled` is `true`, a warm amber overlay is applied to the desktop surface, reducing the amount of blue-spectrum light emitted by the screen. This is particularly useful during evening sessions and maps directly to the `--win-brightness` CSS variable that controls the `filter: brightness(...)` applied to the OS root element.
+
+<Tip>
+  Night Light and Brightness are purely CSS-level effects applied at the browser layer. They do not affect the hardware display backlight — they work entirely through CSS filter manipulation on the document root.
+</Tip>

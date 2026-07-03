@@ -1,0 +1,204 @@
+---
+title: "NEX OS Project Structure and File Layout"
+sidebarTitle: "Project Structure"
+description: "Complete guide to the NEX OS directory layout — source code, context providers, built-in apps, WASM modules, and configuration files."
+---
+
+NEX OS follows a monorepo-style layout where the entire browser OS lives inside a single `windows/` root directory. Application source code lives under `src/`, organized into four primary concerns: components (UI and apps), context (state management), constants (app registry), and utils (shared logic). WebAssembly code is separated into two directories — `assembly/` for AssemblyScript and `wasm-engine/` for Rust — and compiled artifacts are placed in `public/` so Vite can serve them at runtime. Configuration files at the root control the build pipeline, TypeScript strictness, Tailwind design tokens, and AssemblyScript compilation.
+
+## Top-Level Directory Tree
+
+```
+windows/
+├── src/                       # Main application source code
+├── assembly/                  # WebAssembly source (AssemblyScript)
+├── wasm-engine/               # WebAssembly source (Rust)
+├── public/                    # Static assets served as-is
+│   ├── process_utils.js       # WASM JavaScript glue (compiled)
+│   └── process_utils.wasm     # Compiled WASM binary
+├── docs/                      # Internal documentation
+├── dist/                      # Production build output (git-ignored)
+│
+├── package.json               # Dependencies and npm scripts
+├── tsconfig.json              # TypeScript strict configuration
+├── vite.config.ts             # Vite + PWA plugin + build settings
+├── tailwind.config.js         # Design tokens and neon theme colors
+├── eslint.config.js           # ESLint flat config rules
+├── asconfig.json              # AssemblyScript compiler configuration
+│
+├── README.md                  # Project overview
+├── CONTRIBUTING.md            # Contribution guidelines
+└── CODE_OF_CONDUCT.md         # Community code of conduct
+```
+
+## The `src/` Directory
+
+All React, TypeScript, and CSS source lives here. It is subdivided into five main folders, each with a single responsibility.
+
+```
+src/
+├── components/
+│   ├── apps/                  # All desktop application components
+│   ├── system/                # OS lifecycle screens and 3D backgrounds
+│   ├── nexos/                 # Alternative NEX OS desktop environment
+│   │
+│   ├── Desktop.tsx            # Primary desktop (icons, drag, context menu)
+│   ├── Window.tsx             # Window HOC: drag, resize, snap, maximize
+│   ├── Taskbar.tsx            # Bottom taskbar with clock and system tray
+│   ├── StartMenu.tsx          # Start Menu with app grid and search
+│   ├── ContextMenu.tsx        # Right-click context menu
+│   ├── SearchPane.tsx         # Global search panel
+│   ├── CalendarMenu.tsx       # Calendar popover in the taskbar
+│   └── NotificationsMenu.tsx  # Notification center panel
+│
+├── context/
+│   ├── WindowManager.tsx      # Core: window lifecycle, z-index, snap
+│   ├── SettingsContext.tsx    # User preferences persisted to localStorage
+│   ├── FileSystemContext.tsx  # In-memory virtual file system
+│   ├── DesktopContext.tsx     # Desktop icons and virtual workspaces
+│   ├── UIContext.tsx          # Start Menu / Widgets / Switcher visibility
+│   ├── NexRuntimeContext.tsx  # NEX package runtime engine
+│   └── MusicPlayerContext.tsx # Global music player state
+│
+├── constants/
+│   └── apps.tsx               # Central registry of all applications
+│
+├── utils/
+│   ├── cppEngine.ts           # C++ compilation bridge (calls g++)
+│   ├── gpuCharts.ts           # GPU-accelerated chart rendering
+│   ├── useWasmEngine.ts       # Hook: load WASM with JS fallback
+│   ├── id.ts                  # Unique ID generator
+│   └── browserUrls.ts         # Pre-defined URL list for NexBrowser
+│
+├── assets/                    # Images, icons, and audio files
+├── App.tsx                    # Root component and OS state machine
+├── main.tsx                   # React entry point (ReactDOM.createRoot)
+├── index.css                  # Global CSS, theme variables, utilities
+└── vite-env.d.ts              # Vite environment type declarations
+```
+
+## Built-in Applications (`src/components/apps/`)
+
+Each file in `apps/` is a self-contained React component that renders inside a `Window` HOC. All apps are registered centrally in `src/constants/apps.tsx`.
+
+| File | Application | Description |
+| :--- | :--- | :--- |
+| `BrowserApp.tsx` | NexBrowser Pro | Integrated browser with tab history, YouTube support, and private mode |
+| `Calculator.tsx` | Calculator | Functional calculator with operation history |
+| `Calendar.tsx` | Calendar | Monthly view with event markers and date picker |
+| `Clock.tsx` | Clock | Analog + digital clock, stopwatch with laps, countdown timer, and world time zones |
+| `Cmd.tsx` | Terminal | Command Prompt with simulated npm, pnpm, and `.nex` binary execution |
+| `ControlPanel.tsx` | Control Panel | Full system settings: wallpaper, neon theme, brightness, volume, accent color |
+| `counter.tsx` | Counter-Strike | Retro mini-game application |
+| `DevCpp2026.tsx` | Dev-C++ 2026 | IDE with real C++ compilation via g++ bridge |
+| `FileExplorer.tsx` | File Explorer | Virtual file tree/list navigation with drag-and-drop and `.nex` support |
+| `IEApp.tsx` | Internet Explorer | Simulated retro IE browser experience |
+| `ImageViewer.tsx` | Image Viewer | Quick image preview component |
+| `ManualApp.tsx` | Manual | Built-in NEX OS user manual |
+| `mediaplayer.tsx` | Media Player | Multimedia playback application |
+| `Notepad.tsx` | Notepad 2.0 | Advanced text editor with menu bar, zoom, fonts, word counter, and status bar |
+| `Paint.tsx` | Paint | Drawing editor with tools, color palette, and exportable canvas |
+| `Photos.tsx` | Photos | Image gallery with lightbox, zoom, rotation, thumbnail strip, and custom URL support |
+| `RecycleBin.tsx` | Recycle Bin | Recycle bin with restore and permanent delete functionality |
+| `SearchApp.tsx` | Search | Global application and file search |
+| `Settings.tsx` | Settings | Modern settings panel |
+| `SpotifyMini.tsx` | Spotify | Simulated Spotify player with playlist and playback controls |
+| `TaskManager.tsx` | Task Manager | Real-time CPU/RAM monitoring powered by WASM + PowerShell bridge |
+| `Terminal.tsx` | Terminal Pro | Alternative full-featured terminal |
+| `VsCode.tsx` | VS Code | Complete code editor with syntax highlighting |
+| `WindowsDefender.tsx` | Windows Security | Simulated Windows Defender interface |
+| `WordPad.tsx` | WordPad | Rich text document editor |
+
+## System Components (`src/components/system/`)
+
+These components handle the OS lifecycle screens and the 3D background engine — they are not user-launched applications, but core parts of the OS shell.
+
+```
+system/
+├── Background3D.tsx           # Theme-aware 3D background orchestrator
+├── BootScreen.tsx             # Animated POST / BIOS screen
+├── WindowsBoot.tsx            # Windows loading animation
+├── LoginScreen.tsx            # Login screen with wallpaper support
+├── OffScreen.tsx              # Powered-off screen with power button
+├── ShutdownScreen.tsx         # Shutdown transition screen
+├── RestartScreen.tsx          # Restart transition screen
+├── UEFI.tsx                   # UEFI boot selector (Windows vs NEX OS)
+├── TaskView.tsx               # Virtual desktop task view (Win+Tab)
+├── NotificationToast.tsx      # Toast notification system
+├── WidgetsPanel.tsx           # Slide-out widgets panel
+│
+├── 3d/
+│   ├── CyberpunkBG.tsx        # Three.js Cyberpunk neon background
+│   ├── MatrixBG.tsx           # Three.js Matrix code-rain background
+│   └── SynthwaveBG.tsx        # Three.js Synthwave retro-grid background
+│
+└── widgets/
+    ├── WeatherWidget.tsx      # Live weather information widget
+    ├── NewsWidget.tsx         # News feed widget
+    └── StocksWidget.tsx       # Stock ticker widget
+```
+
+`Background3D.tsx` reads the active `neonTheme` value from `SettingsContext` and delegates rendering to the appropriate Three.js scene component (`CyberpunkBG`, `MatrixBG`, or `SynthwaveBG`). When the theme is set to `'none'`, the static wallpaper image is used instead.
+
+## Context Providers (`src/context/`)
+
+NEX OS manages all shared state through React context providers. They are nested in a strict dependency order in `App.tsx` so inner providers can safely consume outer ones.
+
+| Context File | Purpose |
+| :--- | :--- |
+| `WindowManager.tsx` | Core OS nucleus — manages the full lifecycle of every open window: position, size, z-index, snap direction, minimize/maximize state, and virtual desktop assignment. Exposes `openWindow`, `closeWindow`, `minimizeWindow`, `maximizeWindow`, `snapWindow`, `focusWindow`, and `closeFocusedWindow`. |
+| `SettingsContext.tsx` | Stores and persists user preferences to `localStorage` — brightness, volume, accent color, light/dark theme, neon theme (`cyberpunk \| matrix \| synthwave \| none`), wallpaper URL, Wi-Fi/Bluetooth state, night light, and username. Also owns the OS state machine (`systemState`). |
+| `FileSystemContext.tsx` | Provides a fully in-memory virtual file system with CRUD operations. Folder deletion is recursive — removing a folder also removes all nested files and subfolders. |
+| `DesktopContext.tsx` | Manages desktop icon positions (drag-and-drop), icon ordering, and the list of virtual desktops (multiple workspace support). |
+| `UIContext.tsx` | Tracks the open/closed state of system-level UI panels: Start Menu, Widgets Panel, and the Desktop Switcher overlay. |
+
+### NexRuntimeContext
+
+`NexRuntimeContext.tsx` provides the simulated package manager and script runner. It processes commands like `npm install <package>`, `pnpm run <script>`, and execution of `.nex` binary files typed into CMD or Terminal Pro — all sandboxed entirely in memory.
+
+### MusicPlayerContext
+
+`MusicPlayerContext.tsx` manages global audio playback state (current track, play/pause, volume, playlist) so that the music player can persist across window open/close cycles without losing its position.
+
+## WebAssembly Modules
+
+NEX OS includes two separate WebAssembly compilation targets — one in AssemblyScript for the performance layer and one in Rust for the system engine.
+
+### AssemblyScript (`assembly/`)
+
+```
+assembly/
+├── index.ts        # Exported WASM functions: calculateCPULoad, getRank, etc.
+└── tsconfig.json   # TypeScript configuration scoped for AssemblyScript
+```
+
+This is the primary WASM performance layer. Functions exported from `assembly/index.ts` are compiled to `public/process_utils.wasm` and loaded at runtime by the `useWasmEngine` hook in `src/utils/useWasmEngine.ts`. The hook includes a pure JavaScript fallback that activates automatically if the WASM binary fails to load.
+
+Compile with:
+
+```bash
+npm run build:as
+# Runs: asc assembly/index.ts --target release
+# Output: public/process_utils.js + public/process_utils.wasm
+```
+
+### Rust (`wasm-engine/`)
+
+```
+wasm-engine/
+├── src/
+│   └── lib.rs      # Full Rust WASM engine: calculations, process utilities, C++ transpiler
+├── Cargo.toml      # Rust project and dependency manifest
+└── Cargo.lock      # Locked dependency versions
+```
+
+The Rust engine provides additional system-level utilities and serves as the backend for the Dev-C++ 2026 IDE's compilation bridge.
+
+## Configuration Files
+
+| File | Controls |
+| :--- | :--- |
+| `vite.config.ts` | Vite build pipeline — React plugin, PWA manifest via `vite-plugin-pwa`, chunk splitting, output directory, and the PowerShell process bridge for Task Manager metrics. |
+| `tailwind.config.js` | Design tokens, custom color palette, neon theme CSS variables, dark mode strategy, and content paths for tree-shaking unused utility classes. |
+| `tsconfig.json` | Strict TypeScript configuration — `"strict": true`, `"noUnusedLocals": true`, module resolution, JSX transform, and path aliases for `src/`. |
+| `asconfig.json` | AssemblyScript compiler settings — target (`release`), output paths for `.wasm` and `.js` glue files, and optimization level flags. |

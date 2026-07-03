@@ -1,0 +1,122 @@
+---
+title: "NEX OS System Architecture: Providers, Kernel, and Data Flow"
+sidebarTitle: "Overview"
+description: "How NEX OS orchestrates React context providers, the WindowManager kernel, virtual file system, and WASM performance layer into a cohesive desktop OS."
+---
+
+NEX OS is a browser-based desktop operating system built on a layered React architecture where every subsystem — windowing, file storage, process management, and hardware telemetry — is a composable React context provider. The result is a fully reactive OS kernel running entirely in the browser: no server, no native binary, no Electron wrapper. React 19 manages the UI state machine, AssemblyScript and Rust compile to WebAssembly for CPU-intensive tasks, and Three.js renders the immersive 3D backgrounds.
+
+## Provider Composition Tree
+
+At startup, `App.tsx` mounts a nested stack of context providers before any UI is rendered. Each provider owns a distinct domain of OS state, and together they form the layered kernel of the system.
+
+```
+App.tsx
+├── SettingsProvider          — theme, volume, brightness, systemState, wallpaper
+├── MusicPlayerProvider       — background audio playback context
+├── FileSystemProvider        — in-memory virtual file system (VFS)
+├── NexRuntimeProvider        — simulated npm/pnpm engine and .nex binary loader
+├── DesktopProvider           — desktop icons, positions, virtual desktops
+├── UIProvider                — Start Menu, Widgets panel, Desktop Switcher visibility
+└── WindowManagerProvider     — window lifecycle, z-index, snap, focus
+    └── AppContent            — OS state machine (reads from all providers)
+        ├── OffScreen         — power-off screen with boot button
+        ├── BootScreen        — animated BIOS POST sequence
+        ├── WindowsBoot       — Windows loading animation
+        ├── UEFI              — OS selector (Windows 11 / NEX OS)
+        ├── LoginScreen       — user authentication screen
+        └── Desktop           — the running OS environment
+            ├── Background3D  — Three.js scene (Cyberpunk / Matrix / Synthwave)
+            ├── Window × N    — draggable, resizable, snappable app frames
+            ├── Taskbar       — pinned apps, system tray, clock
+            ├── StartMenu     — app launcher
+            └── Overlays      — notifications, TaskView, WidgetsPanel
+```
+
+The order of nesting is intentional. `FileSystemProvider` and `NexRuntimeProvider` sit above `WindowManagerProvider` so that any window content can read from or write to the VFS and the runtime without creating circular dependencies.
+
+## OS Lifecycle States
+
+NEX OS behaves like a real operating system with a linear boot and shutdown sequence. The `systemState` property from `useSettings()` drives which screen is rendered inside `AppContent`. The full state machine type is:
+
+```typescript
+type SystemState =
+  | 'OFF'           // Power-off screen — OffScreen component
+  | 'BOOTING'       // BIOS POST animation — BootScreen (2.5 s)
+  | 'UEFI'          // OS selector — choose Windows or NEX OS
+  | 'WINDOWS_BOOT'  // Windows loading animation (3.5 s)
+  | 'LOGIN'         // Login screen — user enters the desktop
+  | 'DESKTOP'       // Full OS running — Desktop or NexDesktop rendered
+  | 'SHUTTING_DOWN' // Shutdown animation (3 s) → transitions to OFF
+  | 'RESTARTING';   // Restart animation (2.5 s) → transitions to BOOTING
+```
+
+<Steps>
+  <Step title="OFF → BOOTING">
+    The user clicks the power button on `OffScreen`. `setSystemState('BOOTING')` fires and `BootScreen` renders the animated BIOS POST sequence for 2.5 seconds.
+  </Step>
+  <Step title="BOOTING → WINDOWS_BOOT">
+    After the POST timer expires, `setOsType('windows')` locks in the OS selection and `WindowsBoot` plays the Windows loading animation for 3.5 seconds.
+  </Step>
+  <Step title="WINDOWS_BOOT → LOGIN">
+    The login screen mounts. The user's wallpaper is already available via `useSettings()`.
+  </Step>
+  <Step title="LOGIN → DESKTOP">
+    On successful login, `setSystemState('DESKTOP')` renders `Desktop`. The startup sound plays and a welcome notification fires — both one-time actions guarded by a `useRef` flag.
+  </Step>
+  <Step title="DESKTOP → SHUTTING_DOWN / RESTARTING">
+    Shutdown and restart transitions play their respective screen animations before looping back to `OFF` or `BOOTING`.
+  </Step>
+</Steps>
+
+## Data Flow
+
+Every user interaction follows the same reactive cycle through the provider tree. No component reaches outside its own layer — data travels strictly through hooks.
+
+```
+User Interaction (click, keyboard, drag)
+        ↓
+   React Component
+        ↓
+  Hook (useWindowManager / useFileSystem / useSettings / …)
+        ↓
+  Context state update (setState / useReducer)
+        ↓
+  React reconciliation — only subscribed components re-render
+        ↓
+  DOM update → Browser paint
+```
+
+Sibling-to-sibling communication always goes through the shared context rather than prop drilling. For example, when the Taskbar requests that a window be focused, it calls `focusWindow(id)` from `useWindowManager()` — `WindowManager` updates its state, and the `Window` component for that ID re-renders with the new `zIndex` and `focused` class, without any parent needing to coordinate.
+
+## Design Principles
+
+NEX OS is built on four foundational principles that guide every architectural decision:
+
+| Principle | Implementation |
+| :--- | :--- |
+| **Modularity** | Every application is self-contained. Apps are registered in `constants/apps.tsx` and rendered inside the `Window` HOC without knowing anything about the windowing system. |
+| **Performance** | CPU-intensive operations (Task Manager metrics, process telemetry) are offloaded to WebAssembly modules compiled from AssemblyScript (`assembly/index.ts`) and Rust (`wasm-engine/src/lib.rs`), achieving up to 100× speedup over pure JavaScript. |
+| **Reactivity** | React context ensures all OS state is globally available without prop drilling. Components subscribe only to the slices they need, minimising unnecessary re-renders. `React.memo` is applied to the `Window` component to prevent cascading renders when z-index updates. |
+| **Scalability** | New apps are added by creating a component in `src/components/apps/` and adding one entry to the app registry — no changes to the OS core are required. The same pattern extends to themes, widgets, and virtual desktop layouts. |
+
+<Note>
+  The `UEFI` state lets the user switch between the **Windows 11** and **NEX OS** desktop environments at boot time. Both share the same underlying provider stack — only the top-level desktop component changes.
+</Note>
+
+## Explore Further
+
+<CardGroup cols={2}>
+  <Card title="Window Manager" icon="window" href="/architecture/window-manager">
+    Deep-dive into how WindowManagerContext manages window lifecycle, z-index layering, snap layouts, and virtual desktops.
+  </Card>
+  <Card title="Virtual File System" icon="folder-open" href="/architecture/virtual-file-system">
+    Learn how NEX OS implements an in-memory sandboxed VFS with full CRUD support using React context.
+  </Card>
+  <Card title="NEX Runtime" icon="terminal" href="/architecture/nex-runtime">
+    Explore the simulated npm/pnpm execution engine, .nex binary launching, and process telemetry subsystem.
+  </Card>
+  <Card title="WASM Overview" icon="bolt" href="/wasm/overview">
+    Understand how AssemblyScript and Rust compile to WebAssembly to power the performance-critical OS layers.
+  </Card>
+</CardGroup>

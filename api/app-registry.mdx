@@ -1,0 +1,135 @@
+---
+title: "App Registry: Registering Apps in src/constants/apps.tsx"
+sidebarTitle: "App Registry"
+description: "The NEX OS App Registry (APPS array in src/constants/apps.tsx) is the central manifest for all applications — defining ids, icons, labels, and component factories."
+---
+
+The App Registry in `src/constants/apps.tsx` is the single source of truth for every application in NEX OS. The Start Menu, Taskbar pinned apps area, Search pane, and Run dialog (`Win+R`) all read directly from this array — if an app isn't registered here, it doesn't exist to the operating system. Adding a new app is as simple as creating a component and appending one object to the `APPS` array.
+
+## The `AppItem` Interface
+
+Every entry in `APPS` conforms to the `AppItem` interface exported from `src/constants/apps.tsx`:
+
+```typescript
+export interface AppItem {
+  /** Unique identifier — also used as the window id by WindowManager */
+  id: string;
+  /** Identifier resolved by AppRegistry to lazy-load the actual component */
+  appId: string;
+  /** Fluent UI or Lucide icon rendered in Start Menu, Taskbar, and window chrome */
+  icon: React.ReactNode;
+  /** Display name shown in Start Menu, Search results, and window title bar */
+  label: string;
+  /** When true, the app appears as a permanent pin in the Taskbar */
+  isPinned?: boolean;
+}
+```
+
+<Note>
+  The `id` and `appId` fields are intentionally separate. `id` is the **window identifier** used by `WindowManager` at runtime. `appId` is the **registry key** used by `AppRegistry` to resolve the lazy-loaded component. For most apps they are the same string, but they can differ when one logical window wraps multiple registry entries.
+</Note>
+
+## Registration Pattern
+
+Import your component, import an icon from `@fluentui/react-icons` (or `lucide-react`), then push an entry into the `APPS` array. The system picks up the change immediately on the next hot-reload — no additional wiring is required.
+
+```typescript
+// src/constants/apps.tsx
+import { Document24Regular, Clock24Regular, Image24Regular } from '@fluentui/react-icons';
+import Notepad from '../components/apps/Notepad';
+import Clock from '../components/apps/Clock';
+import Photos from '../components/apps/Photos';
+
+export const APPS: AppItem[] = [
+  {
+    id: 'notepad',
+    appId: 'notepad',
+    icon: <Document24Regular />,
+    label: 'Bloc de notas',
+    component: (props) => <Notepad {...props} />
+  },
+  {
+    id: 'clock',
+    appId: 'clock',
+    icon: <Clock24Regular />,
+    label: 'Reloj',
+    component: (props) => <Clock {...props} />
+  },
+  {
+    id: 'photos',
+    appId: 'photos',
+    icon: <Image24Regular />,
+    label: 'Fotos',
+    component: (props) => <Photos {...props} />
+  },
+  // ...
+];
+```
+
+## How `id` and `appId` Are Used Across the System
+
+The two identifier fields each serve a distinct role in different parts of NEX OS:
+
+<CardGroup cols={2}>
+  <Card title="Window lifecycle (id)" icon="window">
+    `id` is passed directly to `openWindow`, `closeWindow`, `minimizeWindow`, `restoreWindow`, and `focusWindow` in `WindowManager`. It is also the key stored in `AppWindow.id` and used by the Taskbar to track which windows are open.
+  </Card>
+  <Card title="Component resolution (appId)" icon="puzzle-piece">
+    `appId` is the key read by `AppRegistry` to dynamically import the component module. This separation allows future lazy-loading and code-splitting without touching the window management layer.
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title=".nex file resolution" icon="file">
+    `.nex` executables (virtual binaries analogous to `.exe`) embed an `appId` in their metadata payload. When a `.nex` file is double-clicked in File Explorer, `resolveNex()` in `NexRuntimeContext` looks up the matching `appId` in `APPS` and calls `openWindow`.
+  </Card>
+  <Card title="Run dialog (Win+R)" icon="terminal">
+    Typing `notepad` in the Run dialog calls `resolveNex('notepad')`, which finds the entry where `id === 'notepad'` and launches it. Typing `notepad.nex` also resolves correctly — the `.nex` extension is stripped before the lookup.
+  </Card>
+</CardGroup>
+
+## Taskbar Pinning
+
+Setting `isPinned: true` on an `AppItem` entry places a permanent shortcut in the Taskbar's pinned apps row, visible at all times regardless of whether a window is open:
+
+```typescript
+{
+  id: 'terminal',
+  appId: 'terminal',
+  icon: <span style={{ fontFamily: 'Consolas, monospace', fontSize: 16 }}>C:\\</span>,
+  label: 'Terminal',
+  isPinned: true,
+}
+```
+
+<Tip>
+  Reserve `isPinned: true` for power-user utilities that should always be one click away. Pinning too many apps crowds the Taskbar and reduces the signal-to-noise ratio for the user.
+</Tip>
+
+## Currently Registered Apps
+
+The following 17 apps are registered in `APPS` as of the latest build. Each `id` is the canonical identifier to use when calling `openWindow` or writing a `.nex` file.
+
+| ID | Label | Pinned |
+|---|---|:---:|
+| `search` | Buscar | — |
+| `files` | Explorador de archivos | ✓ |
+| `chrome` | Google Chrome | ✓ |
+| `vscode` | NEX Code | ✓ |
+| `paint` | Paint | — |
+| `control-panel` | Configuración | ✓ |
+| `wordpad` | WordPad | — |
+| `task-manager` | Administrador de tareas | — |
+| `calendar` | Calendario | — |
+| `defender` | Seguridad de Windows | — |
+| `calculator` | Calculadora | — |
+| `notepad` | Bloc de notas | — |
+| `terminal` | Terminal | ✓ |
+| `clock` | Reloj | — |
+| `photos` | Fotos | — |
+| `nexreproductor` | NexReproductor | ✓ |
+| `spotify` | Spotify | — |
+
+<Note>
+  The `search` app (`id: 'search'`) is registered in `APPS` but is typically surfaced via the Search pane (`SearchPane.tsx`) rather than as a standalone window. It resolves correctly through the Run dialog and `resolveNex` just like any other app.
+</Note>

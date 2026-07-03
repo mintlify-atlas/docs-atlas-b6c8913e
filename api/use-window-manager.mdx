@@ -1,0 +1,260 @@
+---
+title: "useWindowManager() Hook API Reference"
+sidebarTitle: "useWindowManager"
+description: "Complete API reference for the useWindowManager React hook — the core kernel of NEX OS managing window lifecycle, z-index, snap layouts, and virtual desktops."
+---
+
+`useWindowManager` is the most important hook in NEX OS — it exposes the complete window lifecycle API for opening, closing, minimizing, maximizing, snapping, and focusing windows. It acts as the **kernel** of the operating system, coordinating z-index management, virtual desktop assignments, snap layouts, and state preservation across every window instance.
+
+## Import
+
+```typescript
+import { useWindowManager } from '../context/WindowManager';
+```
+
+---
+
+## AppWindow Interface
+
+Every managed window is represented as an `AppWindow` object in the global `windows` array.
+
+```typescript
+interface AppWindow {
+  id: string;
+  title: string;
+  icon: ReactNode;
+  content: ReactNode;
+  desktopId: string;
+  isOpen: boolean;
+  isMinimized: boolean;
+  isMaximized: boolean;
+  snap?: 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'none';
+  zIndex: number;
+  savedSize?: { width: number; height: number; x: number; y: number };
+}
+```
+
+<ResponseField name="id" type="string" required>
+  Unique window identifier. Used as the primary key for all window operations — pass this to `closeWindow`, `focusWindow`, `snapWindow`, and so on.
+</ResponseField>
+
+<ResponseField name="title" type="string" required>
+  Text rendered in the window's title bar.
+</ResponseField>
+
+<ResponseField name="icon" type="ReactNode" required>
+  Icon displayed alongside the title in both the title bar and the taskbar button.
+</ResponseField>
+
+<ResponseField name="content" type="ReactNode" required>
+  The actual application component rendered inside the window frame. Wrap heavy apps in `React.memo` to prevent unnecessary re-renders when `zIndex` changes.
+</ResponseField>
+
+<ResponseField name="desktopId" type="string" required>
+  The virtual desktop this window belongs to. Windows are only rendered when their `desktopId` matches the currently active desktop.
+</ResponseField>
+
+<ResponseField name="isOpen" type="boolean" required>
+  Whether the window is currently visible on screen. A window can exist in state but not be open (e.g., while minimized).
+</ResponseField>
+
+<ResponseField name="isMinimized" type="boolean" required>
+  `true` when the window has been sent to the taskbar. The window's internal React state is fully preserved — use `restoreWindow` to bring it back without reinitializing.
+</ResponseField>
+
+<ResponseField name="isMaximized" type="boolean" required>
+  `true` when the window occupies the full viewport. The previous size and position are saved to `savedSize` before maximizing.
+</ResponseField>
+
+<ResponseField name="snap" type="'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'none'">
+  The active snap position. `'none'` or `undefined` means the window is freely positioned.
+</ResponseField>
+
+<ResponseField name="zIndex" type="number" required>
+  Stacking layer order. Managed automatically by `focusWindow` — the focused window always receives the highest `zIndex`.
+</ResponseField>
+
+<ResponseField name="savedSize" type="{ width: number; height: number; x: number; y: number }">
+  Stores the window's dimensions and position captured just before maximizing. Restored when the user un-maximizes, ensuring the window returns to exactly where it was.
+</ResponseField>
+
+---
+
+## Properties
+
+<ResponseField name="windows" type="AppWindow[]">
+  The live array of all window instances — both open and minimized. Subscribe to this to render taskbar buttons or check for existing windows before launching a new one.
+</ResponseField>
+
+<ResponseField name="focusedWindowId" type="string | null">
+  The `id` of the window that currently has focus. `null` when no window is active (e.g., the desktop itself is focused). Used by `closeFocusedWindow` to implement Alt+F4.
+</ResponseField>
+
+---
+
+## Methods
+
+### openWindow
+
+Opens a new window, or restores and focuses the window if one with the same `id` already exists in state.
+
+<ParamField path="id" type="string" required>
+  Unique identifier for the window. If a window with this `id` already exists, `openWindow` will restore it instead of creating a duplicate.
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Display text for the window title bar.
+</ParamField>
+
+<ParamField path="icon" type="ReactNode" required>
+  Icon shown in the title bar and taskbar.
+</ParamField>
+
+<ParamField path="content" type="ReactNode" required>
+  The application component to render inside the window.
+</ParamField>
+
+---
+
+### closeWindow
+
+Closes the window and removes it entirely from the `windows` state array.
+
+<ParamField path="id" type="string" required>
+  The ID of the window to close and destroy.
+</ParamField>
+
+---
+
+### minimizeWindow
+
+Sends the window to the taskbar. The window's internal React state is frozen in place — nothing is unmounted.
+
+<ParamField path="id" type="string" required>
+  The ID of the window to minimize.
+</ParamField>
+
+---
+
+### minimizeAllWindows
+
+Minimizes every open window at once. Bound to the **Win+D** keyboard shortcut. Equivalent to calling `minimizeWindow` on each entry in `windows`.
+
+---
+
+### maximizeWindow
+
+Toggles the maximized state of a window. When maximizing, the current dimensions and coordinates are written to `savedSize` so they can be restored precisely later.
+
+<ParamField path="id" type="string" required>
+  The ID of the window to maximize or un-maximize.
+</ParamField>
+
+<ParamField path="currentSize" type="{ width: number; height: number; x: number; y: number }">
+  The window's current size and position. Pass this so `savedSize` captures the exact geometry before the window goes fullscreen.
+</ParamField>
+
+---
+
+### restoreWindow
+
+Brings a minimized window back to the screen **without reinitializing its content**. This is the key difference from `openWindow` — the app component is not remounted, so all internal state (scroll position, text inputs, media playback) is preserved.
+
+<ParamField path="id" type="string" required>
+  The ID of the minimized window to restore.
+</ParamField>
+
+---
+
+### snapWindow
+
+Docks the window to a screen region. The Window HOC applies the corresponding CSS layout (half-screen, quadrant, etc.) based on the `direction` value.
+
+<ParamField path="id" type="string" required>
+  The ID of the window to snap.
+</ParamField>
+
+<ParamField path="direction" type="'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'none'" required>
+  The target snap region. Pass `'none'` to release the window from a snapped position.
+</ParamField>
+
+---
+
+### focusWindow
+
+Brings a window to the front by assigning it the highest `zIndex` value and updating `focusedWindowId`.
+
+<ParamField path="id" type="string" required>
+  The ID of the window to bring into focus.
+</ParamField>
+
+---
+
+### closeFocusedWindow
+
+Closes whichever window is currently focused (`focusedWindowId`). This is the handler for the global **Alt+F4** keyboard shortcut.
+
+---
+
+## Usage Example
+
+```typescript
+import { useWindowManager } from '../context/WindowManager';
+import MiApp from './apps/MiApp';
+
+export const LauncherButton = () => {
+  const { openWindow, restoreWindow, windows } = useWindowManager();
+
+  const handleClick = () => {
+    const existing = windows.find(w => w.id === 'mi-app');
+    if (existing?.isMinimized) {
+      restoreWindow('mi-app');
+    } else {
+      openWindow('mi-app', 'Mi App', <span>🚀</span>, <MiApp />);
+    }
+  };
+
+  return <button onClick={handleClick}>Open App</button>;
+};
+```
+
+---
+
+## Best Practices
+
+<Tip>
+  Always check `windows.find(w => w.id === 'your-id')` before calling `openWindow`. If the window already exists, call `restoreWindow` instead — this preserves the app's internal React state and avoids remounting the component tree.
+</Tip>
+
+<Tip>
+  Wrap any heavy application component in `React.memo` before passing it as `content`. The `WindowManager` updates `zIndex` on every focus change, which triggers re-renders of the entire `windows` array. `React.memo` prevents unnecessary work in apps that don't need to respond to those updates.
+
+  ```typescript
+  const HeavyApp = React.memo(() => {
+    return <div>Expensive content…</div>;
+  });
+
+  openWindow('heavy', 'Heavy App', <Icon />, <HeavyApp />);
+  ```
+</Tip>
+
+<Tip>
+  Always pass `currentSize` when calling `maximizeWindow` so that `savedSize` captures the exact position before the window goes fullscreen:
+
+  ```typescript
+  const { maximizeWindow } = useWindowManager();
+
+  const handleMaximize = () => {
+    maximizeWindow(windowId, {
+      width: size.width,
+      height: size.height,
+      x: pos.x,
+      y: pos.y,
+    });
+  };
+  ```
+</Tip>
+
+<Note>
+  `useWindowManager` must be called inside a component that is a descendant of `WindowManagerProvider`. Calling it outside the provider tree throws an error.
+</Note>

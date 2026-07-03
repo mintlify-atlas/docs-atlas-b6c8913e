@@ -1,47 +1,163 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with NEX OS in Under 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Clone, install, and run NEX OS locally with npm. Includes dev server setup, production build, and optional WASM compilation steps."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This guide walks you through everything needed to get NEX OS running on your local machine — from cloning the repository to seeing the animated UEFI boot screen in your browser. The full installation takes under five minutes on a standard internet connection, and no special tooling beyond Node.js and npm is required to start developing.
 
 ## Prerequisites
 
-Before you begin, you must have:
+Before you begin, make sure the following are available in your environment:
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+- **Node.js** 18.0.0 or higher (20.x LTS recommended) — [Download](https://nodejs.org/)
+- **npm** 9.0.0 or higher (bundled with Node.js 18+)
 
-## Get started
+Verify your versions before proceeding:
+
+```bash
+node --version   # Should output v18.x.x or higher
+npm --version    # Should output 9.x.x or higher
+```
+
+## Installation
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Clone the Repository">
+    Clone the NEX OS repository from GitHub and navigate into the project directory.
 
     ```bash
-    npm install your-package
+    git clone https://github.com/shadownrx/windows.git
+    cd windows
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
+  <Step title="Install Dependencies">
+    Install all project dependencies. NEX OS supports npm, yarn, and pnpm — use whichever you prefer.
+
+    <CodeGroup>
+      ```bash npm
+      npm install
+      ```
+
+      ```bash yarn
+      yarn install
+      ```
+
+      ```bash pnpm
+      pnpm install
+      ```
+    </CodeGroup>
+
+    This installs all runtime and dev dependencies declared in `package.json`, including React 19, Vite 8, Framer Motion 12, Three.js, AssemblyScript, and all Fluent UI icon packages.
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Start the Development Server">
+    Launch the Vite development server with Hot Module Replacement enabled.
 
     ```bash
-    your-cli start
+    npm run dev
     ```
+
+    The terminal will output:
+
+    ```
+    VITE v8.x.x  ready in xxx ms
+
+    ➜  Local:   http://localhost:5173/
+    ➜  press h + enter to show help
+    ```
+
+    Open `http://localhost:5173` in your browser. You will be greeted by the animated UEFI boot screen — the entry point to the NEX OS lifecycle. From there, the sequence proceeds automatically through POST, Windows Boot, and the Login screen before landing on the desktop.
+
+    <Tip>
+      NEX OS defaults to the **Windows 11** desktop mode after login. To switch to the alternative **NEX OS** desktop, select it from the UEFI boot selector at startup.
+    </Tip>
+  </Step>
+
+  <Step title="(Optional) Compile WASM Modules">
+    If you plan to modify the WebAssembly performance layer, compile the AssemblyScript source to WASM before starting the dev server.
+
+    ```bash
+    npm run build:as
+    ```
+
+    This command runs the AssemblyScript compiler (`asc`) against `assembly/index.ts` and outputs the compiled binary to `public/process_utils.wasm` along with its JavaScript glue file `public/process_utils.js`, as configured in `asconfig.json`.
+
+    <Note>
+      You only need to run `build:as` if you modify files inside the `assembly/` directory. The pre-compiled WASM artifacts are already included in the repository and work out of the box for all built-in features, including the real-time Task Manager.
+    </Note>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Production Build
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+When you are ready to deploy or benchmark the production bundle, run the full build pipeline followed by the local preview server.
+
+```bash
+npm run build
+npm run preview
+```
+
+The `build` script chains three steps automatically: `npm run build:as` (AssemblyScript → WASM), `tsc -b` (TypeScript type check), and `vite build` (bundle and optimize). Output lands in the `dist/` directory.
+
+| Artifact | Uncompressed | Gzip |
+| :--- | :--- | :--- |
+| `dist/assets/index.js` | ~1,863 KB | ~499 KB |
+| `dist/assets/index.css` | ~27.6 KB | ~6.4 KB |
+| `dist/index.html` | ~1.2 KB | ~0.6 KB |
+
+<Tip>
+  Enable Brotli compression on your hosting provider for maximum transfer performance. Brotli typically achieves 15–20% better compression than gzip on JavaScript bundles.
 </Tip>
+
+## Available npm Scripts
+
+| Script | Description |
+| :--- | :--- |
+| `npm run dev` | Start the Vite dev server with instant HMR on `localhost:5173` |
+| `npm run build` | Full production pipeline: WASM compile → TypeScript check → Vite bundle |
+| `npm run build:as` | Compile `assembly/index.ts` → WASM only (skips TypeScript and Vite) |
+| `npm run preview` | Serve the `dist/` folder locally for production preview |
+| `npm run lint` | Run ESLint across all source files using the project's flat config |
+
+## Troubleshooting
+
+<Accordion title="Port 5173 is already in use">
+  Another process is occupying the default Vite port. Start the dev server on a different port by passing the `--port` flag:
+
+  ```bash
+  npm run dev -- --port 3000
+  ```
+
+  Vite will start on `http://localhost:3000` instead. You can use any available port number.
+</Accordion>
+
+<Accordion title="WASM module not found at runtime">
+  This error appears when the pre-compiled WebAssembly artifacts are missing from `public/`. Recompile them and then rebuild:
+
+  ```bash
+  npm run build:as
+  npm run build
+  ```
+
+  After running these commands, restart the dev server with `npm run dev`. The `useWasmEngine` hook automatically falls back to a JavaScript implementation if the WASM binary cannot be loaded, so the Task Manager will still function — but with reduced performance.
+</Accordion>
+
+<Accordion title="Missing modules or peer dependency errors after npm install">
+  If you encounter missing module errors or corrupted installs, perform a clean reinstall by removing the `node_modules` directory and the lock file, then reinstalling from scratch:
+
+  ```bash
+  rm -rf node_modules package-lock.json
+  npm install
+  ```
+
+  On Windows (PowerShell), use:
+
+  ```powershell
+  Remove-Item -Recurse -Force node_modules, package-lock.json
+  npm install
+  ```
+
+  If you are using Node.js 22+ and see peer dependency warnings related to React 19, they are expected and safe to ignore — all packages in NEX OS have been verified compatible with React 19.
+</Accordion>

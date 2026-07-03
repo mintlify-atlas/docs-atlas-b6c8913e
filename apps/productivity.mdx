@@ -1,0 +1,95 @@
+---
+title: "Productivity Apps: Notepad, Paint, Photos, and More"
+sidebarTitle: "Productivity"
+description: "NEX OS ships a full productivity suite including Notepad 2.0, Paint, Photos gallery, Calculator, Calendar, Clock, WordPad, VS Code clone, and Spotify player."
+---
+
+Beyond the system-level apps, NEX OS ships a complete productivity suite for everyday use. These applications range from text editors and drawing tools to music players and full development IDEs — all running in draggable, resizable windows managed by `WindowManagerContext`. Every app is self-contained, opens instantly, and preserves its state as long as its window remains open (even when minimized).
+
+---
+
+## Application Suite
+
+<CardGroup cols={2}>
+  <Card title="Notepad 2.0" icon="file-lines">
+    **`Notepad.tsx`** ⭐ — An advanced text editor that goes well beyond the classic Windows Notepad. Features a full menu bar (File, Edit, View, Format), adjustable zoom levels, font family and size selection, a live word and character counter, and a persistent status bar showing cursor position. Integrates with `useFileSystem()` to open and save `.txt` files from the VFS. Use **Ctrl+S** to save.
+  </Card>
+  <Card title="Paint" icon="paintbrush">
+    **`Paint.tsx`** — A canvas-based drawing application with a full set of drawing tools (pencil, brush, shapes, eraser, fill), a color palette picker, adjustable stroke sizes, and canvas export. All drawing is rendered to an HTML `<canvas>` element using the 2D Context API, keeping it entirely client-side with no external dependencies.
+  </Card>
+  <Card title="Photos" icon="image">
+    **`Photos.tsx`** ⭐ — A full-featured image gallery with lightbox viewer, pinch/scroll zoom, rotation controls, a thumbnail filmstrip at the bottom, and support for custom image URLs. Images can be loaded from VFS `VirtualFile` entries that have an `imageUrl` field, or passed directly as a prop array from File Explorer when double-clicking an image file.
+  </Card>
+  <Card title="Calculator" icon="calculator">
+    **`Calculator.tsx`** — A functional calculator with standard arithmetic operations, keyboard input support, and a scrollable operation history panel that records every calculation performed during the session.
+  </Card>
+  <Card title="Calendar" icon="calendar">
+    **`Calendar.tsx`** — A monthly calendar view with date navigation, event markers, and a date picker. The current date is highlighted automatically. Events can be added to specific dates and are stored in component state for the duration of the session.
+  </Card>
+  <Card title="Clock" icon="clock">
+    **`Clock.tsx`** ⭐ — A multi-mode time application with four distinct views: an animated analog clock face, a digital clock display, a stopwatch with lap recording, and a countdown timer with a circular progress animation. Also includes a world timezones panel showing current time in major cities.
+  </Card>
+  <Card title="WordPad" icon="file-word">
+    **`WordPad.tsx`** — A rich text editor supporting basic formatting (bold, italic, underline, font size, alignment) with a toolbar ribbon. Richer than Notepad but simpler than the VS Code clone. Supports **Ctrl+S** to save content to a VFS file.
+  </Card>
+  <Card title="VS Code" icon="code">
+    **`VsCode.tsx`** — A full Visual Studio Code interface clone with a sidebar (file explorer, search, source control, extensions panels), a tab bar for multiple open files, a Monaco-style code editor area, a status bar, and an integrated terminal panel at the bottom. Supports **Ctrl+S** to write file content back to the VFS via `useFileSystem()`.
+  </Card>
+  <Card title="Dev-C++ 2026" icon="terminal">
+    **`DevCpp2026.tsx`** — An IDE modeled after the classic Dev-C++ environment, targeting C and C++ development. Connects to the `cppEngine.ts` utility (`src/utils/cppEngine.ts`) which bridges to a real `g++` compilation process via the Vite dev server. In production, compilation output is simulated. Includes a code editor pane, compiler output panel, and run/build toolbar.
+  </Card>
+  <Card title="SpotifyMini" icon="music">
+    **`SpotifyMini.tsx`** ⭐ — A simulated Spotify music player with a playlist view, track metadata (title, artist, album art), playback controls (play/pause, skip, previous, shuffle, repeat), and a progress bar with seek support. All audio and track data are simulated — no real Spotify API calls are made.
+  </Card>
+  <Card title="Windows Defender" icon="shield-halved">
+    **`WindowsDefender.tsx`** — A simulated Windows Defender security interface with a scan animation, threat detection results, quarantine list, and protection status indicators. The scan runs as an animated progress sequence. No real system scanning occurs.
+  </Card>
+  <Card title="Recycle Bin" icon="trash">
+    **`RecycleBin.tsx`** — The virtual trash for the NEX OS VFS. Files deleted from File Explorer or via terminal commands (`del`, `rm`) are moved here rather than immediately purged. Items can be restored to their original VFS location or permanently deleted from the Recycle Bin interface.
+  </Card>
+</CardGroup>
+
+---
+
+## Additional Utility Apps
+
+Beyond the main productivity suite, NEX OS also ships the following utility applications:
+
+| App | Source File | Description |
+|-----|-------------|-------------|
+| Image Viewer | `ImageViewer.tsx` | Lightweight single-image preview, launched by double-clicking images in File Explorer |
+| Media Player | `mediaplayer.tsx` | General-purpose multimedia playback application |
+| Search | `SearchApp.tsx` | Global application and file search, also accessible via the taskbar search bar |
+| Manual | `ManualApp.tsx` | Built-in system documentation and help browser |
+| Control Panel | `ControlPanel.tsx` | Full OS settings: wallpaper, neon theme, brightness, volume, accent color, WiFi, Bluetooth |
+| Counter-Strike | `counter.tsx` | Retro mini-game app bundled for fun |
+| Internet Explorer | `IEApp.tsx` | Classic IE-style retro browser for nostalgia |
+
+---
+
+## Keyboard Shortcuts in Productivity Apps
+
+<Tip>
+  Most text-editing applications in NEX OS respond to the **Ctrl+S** shortcut to save the current file content back to the Virtual File System via `useFileSystem().updateFileContent()`. This works in:
+  - **Notepad 2.0** (`Notepad.tsx`)
+  - **WordPad** (`WordPad.tsx`)
+  - **VS Code** (`VsCode.tsx`)
+  - **Dev-C++ 2026** (`DevCpp2026.tsx`)
+
+  If the file was opened from the VFS (e.g., by double-clicking a `.txt` file in File Explorer), the `fileId` prop is passed to the app and Ctrl+S writes directly to that VFS entry. If no `fileId` is provided (app opened fresh from the Start Menu), Ctrl+S may prompt for a save location or create a new file depending on the app's implementation.
+</Tip>
+
+---
+
+## Opening Productivity Apps
+
+All productivity apps can be launched from:
+
+- **Start Menu** — Click the Windows/NEX button in the taskbar
+- **Taskbar pinned icons** — Notepad, Clock, Photos, and SpotifyMini are pinned by default
+- **File Explorer** — Double-click `.txt` files to open Notepad, `.jpg`/`.png` files to open Photos
+- **Terminal / CMD** — Use `start notepad`, `notepad.nex`, or `./notepad.nex`
+- **Run dialog (Win+R)** — Type the app name (e.g., `notepad`, `calc`, `paint`)
+- **Desktop icons** — Right-click the desktop and create a shortcut
+
+Each app is registered in `src/constants/apps.tsx` with a unique `id`, an icon from `@fluentui/react-icons`, and a component factory. Adding a new productivity app follows the same pattern — see [Apps Overview](/apps/overview) for the registration guide.

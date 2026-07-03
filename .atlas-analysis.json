@@ -1,0 +1,107 @@
+{
+  "projectType": "frontend",
+  "projectName": "NEX OS",
+  "projectDescription": "A browser-based operating system built with React 19, TypeScript, WebAssembly, and Three.js that simulates a full desktop environment with 20+ integrated applications, virtual file system, window management, and neon themes.",
+  "theme": "willow",
+  "primaryColor": "#7c7c7c",
+  "lightColor": "#050505",
+  "darkColor": "#d4d4d4",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "project-structure"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/window-manager",
+              "architecture/virtual-file-system",
+              "architecture/nex-runtime"
+            ]
+          },
+          {
+            "group": "Built-in Applications",
+            "pages": [
+              "apps/overview",
+              "apps/file-explorer",
+              "apps/terminal",
+              "apps/task-manager",
+              "apps/browser",
+              "apps/productivity"
+            ]
+          },
+          {
+            "group": "Theming & UI",
+            "pages": [
+              "theming/themes",
+              "theming/desktop",
+              "theming/keyboard-shortcuts"
+            ]
+          },
+          {
+            "group": "WebAssembly",
+            "pages": [
+              "wasm/overview",
+              "wasm/assemblyscript",
+              "wasm/rust-engine"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Hooks",
+            "pages": [
+              "api/use-window-manager",
+              "api/use-settings",
+              "api/use-file-system",
+              "api/use-desktop",
+              "api/use-ui"
+            ]
+          },
+          {
+            "group": "Extending NEX OS",
+            "pages": [
+              "api/building-apps",
+              "api/app-registry",
+              "api/wasm-hook"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Full desktop environment in the browser with drag-and-drop windows, snap layouts, and virtual desktops",
+    "20+ built-in applications including File Explorer, Terminal, Task Manager, Browser, Notepad, Paint, and VS Code clone",
+    "NEX Runtime engine with simulated npm/pnpm package management and .nex executable support",
+    "WASM performance layer using AssemblyScript and Rust for CPU-intensive calculations (100x faster than JS)",
+    "Dynamic neon themes: Cyberpunk, Matrix, and Synthwave with Three.js 3D backgrounds",
+    "Virtual File System (VFS) in-memory with full CRUD operations and recursive folder support",
+    "Full OS lifecycle: UEFI → POST → Boot → Login → Desktop → Shutdown/Restart",
+    "PWA-ready with offline support and installable as a native app via vite-plugin-pwa"
+  ],
+  "publicApiSurface": [
+    "useWindowManager() — openWindow, closeWindow, minimizeWindow, maximizeWindow, restoreWindow, snapWindow, focusWindow",
+    "useSettings() — theme, neonTheme, wallpaper, accentColor, brightness, volume, toggleTheme, setNeonTheme, addNotification",
+    "useFileSystem() — files, createFile, updateFileContent (VirtualFile interface)",
+    "useDesktop() — addDesktopIcon, updateDesktopIcon, removeDesktopIcon, sortDesktopIcons, switchDesktop, addDesktop",
+    "useUI() — isStartOpen, toggleStart, isWidgetsOpen, toggleWidgets, isDesktopSwitcherOpen",
+    "useWasmEngine() — isReady, isWasm, calculateLoad, getRank",
+    "APPS registry in src/constants/apps.tsx — id, icon, label, component",
+    "AppWindow interface — id, title, icon, content, desktopId, isOpen, isMinimized, isMaximized, snap, zIndex, savedSize",
+    "SystemState type — OFF | BOOTING | UEFI | WINDOWS_BOOT | LOGIN | DESKTOP | SHUTTING_DOWN | RESTARTING",
+    "assembly/index.ts WASM exports — calculateSystemLoad, processMetrics, analyzePerformance"
+  ]
+}

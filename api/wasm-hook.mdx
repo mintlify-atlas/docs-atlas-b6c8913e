@@ -1,0 +1,163 @@
+---
+title: "useWasmEngine() Hook: WASM with Automatic JS Fallback"
+sidebarTitle: "useWasmEngine"
+description: "API reference for the useWasmEngine hook — loads the AssemblyScript WASM module with automatic JavaScript fallback, exposing calculateLoad, getRank, and a full suite of system-monitoring utilities."
+---
+
+`useWasmEngine` is a custom React hook in `src/utils/useWasmEngine.ts` that asynchronously loads the compiled AssemblyScript WASM module and exposes it through a clean, typed API. The WASM binary is loaded once as a singleton and cached for the lifetime of the page — subsequent calls to the hook share the same instance with zero re-loading overhead. If the WASM module fails to initialize for any reason (browser policy, missing file, network error), the hook transparently falls back to a pure JavaScript implementation with an identical API surface. Callers never need to branch on WASM availability.
+
+## Import
+
+```typescript
+import { useWasmEngine } from '../utils/useWasmEngine';
+```
+
+## Return Value
+
+The hook returns a single object with status flags and all exposed engine functions.
+
+### Status Fields
+
+<ResponseField name="isReady" type="boolean">
+  Becomes `true` once the engine — WASM or JS fallback — has finished loading and all functions are safe to call. Always check `isReady` before invoking any method to avoid calling `undefined`.
+</ResponseField>
+
+<ResponseField name="isWasm" type="boolean">
+  `true` when the AssemblyScript WASM binary loaded successfully and all operations run at native speed. `false` when the JS fallback is active. Use this flag for diagnostic UIs or performance logging.
+</ResponseField>
+
+### Core System-Load Functions
+
+<ResponseField name="calculateLoad(cpu, mem, disk)" type="(cpu: number, mem: number, disk: number) => number">
+  Computes a weighted system-load score (0–100) from three normalized inputs using a sigmoid curve. Weights are: CPU × 0.55, memory × 0.30, disk × 0.15.
+
+  <ParamField path="cpu" type="number" required>
+    CPU utilization as a fraction between `0` and `1` (e.g., `0.85` = 85% CPU).
+  </ParamField>
+  <ParamField path="mem" type="number" required>
+    Memory utilization as a fraction between `0` and `1`.
+  </ParamField>
+  <ParamField path="disk" type="number" required>
+    Disk activity as a fraction between `0` and `1`.
+  </ParamField>
+
+  Returns a `number` representing the composite load score in the range `0–100`.
+</ResponseField>
+
+<ResponseField name="getRank(load)" type="(load: number) => number">
+  Maps a load score to a discrete performance rank integer.
+
+  <ParamField path="load" type="number" required>
+    A load value as returned by `calculateLoad` (0–100).
+  </ParamField>
+
+  | Return value | Meaning | Threshold |
+  |:---:|---|---|
+  | `0` | Low | load ≤ 20 |
+  | `1` | Normal | 20 < load ≤ 55 |
+  | `2` | High | 55 < load ≤ 85 |
+  | `3` | Critical | load > 85 |
+</ResponseField>
+
+### Advanced Engine Functions
+
+<ResponseField name="processColor(name)" type="(name: string) => string">
+  Deterministically generates a stable HSL color string for a named process (e.g., `"chrome.exe"`). The color is derived from a djb2 hash of the name, so the same name always returns the same color across renders and sessions.
+</ResponseField>
+
+<ResponseField name="simulateProcesses(processes, tick, openWindows)" type="(processes: WasmProcessSnapshot[], tick: number, openWindows: string[]) => WasmProcessSnapshot[]">
+  Advances a list of process snapshots by one simulation tick — jittering CPU, memory, and disk values with realistic variance. Processes whose names match entries in `openWindows` receive higher CPU jitter to reflect user-focused activity.
+</ResponseField>
+
+<ResponseField name="aggregateMetrics(processes, totalRamKb, tick)" type="(processes: WasmProcessSnapshot[], totalRamKb: number, tick: number) => WasmSystemMetrics">
+  Reduces a list of process snapshots into a single `WasmSystemMetrics` object containing `cpu_total`, `mem_used_mb`, `mem_percent`, `disk_active`, `net_mbps`, `process_count`, `thread_count`, and `uptime_seconds`.
+</ResponseField>
+
+<ResponseField name="generateCpuHistory(base, length, seed?)" type="(base: number, length: number, seed?: number) => number[]">
+  Generates a plausible CPU history array of `length` data points starting from `base` percent, with bounded random walk. Useful for initializing sparkline charts before live data arrives.
+</ResponseField>
+
+<ResponseField name="ema(data, alpha?)" type="(data: number[], alpha?: number) => number[]">
+  Applies an Exponential Moving Average with smoothing factor `alpha` (default `0.3`) to a data series. Returns a smoothed array of the same length, ideal for de-noising real-time metric charts.
+</ResponseField>
+
+<ResponseField name="transpileCpp(code)" type="(code: string) => { js_code: string; errors: string[]; warnings: string[] }">
+  Passes C++ source code through the WASM transpiler (used internally by Dev-C++ 2026). When WASM is unavailable, returns the original code with an error noting that the fallback does not support C++ transpilation.
+</ResponseField>
+
+## Basic Usage
+
+```typescript
+import { useWasmEngine } from '../utils/useWasmEngine';
+
+export const MyComponent = () => {
+  const { isReady, isWasm, calculateLoad, getRank } = useWasmEngine();
+
+  if (!isReady) return <div>Loading engine...</div>;
+
+  const load = calculateLoad(0.7, 0.4, 0.2);
+  const rank = getRank(load);
+
+  return (
+    <div>
+      <p>Load: {load.toFixed(2)}%</p>
+      <p>Rank: {rank}</p>
+      <p>Engine: {isWasm ? 'WASM' : 'JS Fallback'}</p>
+    </div>
+  );
+};
+```
+
+<Note>
+  Always gate calls to `calculateLoad`, `getRank`, and any other engine function behind an `isReady` check. Before `isReady` is `true`, the hook's internal `wasmRef` may still be resolving and calling a function would return `undefined` rather than throwing a typed error.
+</Note>
+
+## Fallback Behavior
+
+If `public/process_utils.wasm` fails to load — because the browser blocks WASM execution, the file is missing from the build, or the fetch times out — the hook silently activates its JS fallback implementations. The fallback provides mathematically identical results for `calculateLoad`, `getRank`, `processColor`, `ema`, `smooth_history`, and `generate_cpu_history`. Only `transpile_cpp` degrades gracefully with a message noting that C++ transpilation requires WASM.
+
+```typescript
+const { isWasm } = useWasmEngine();
+console.log(isWasm ? 'Running at native speed' : 'Using JS fallback');
+```
+
+<Tip>
+  In production builds, WASM is expected to load on all modern browsers (Chrome 57+, Firefox 53+, Safari 11+, Edge 16+). The fallback is primarily a development and compatibility safety net. If you observe `isWasm: false` in production, check that `public/process_utils.wasm` is present in your deployment output and that your server sets the `application/wasm` MIME type.
+</Tip>
+
+## The `WasmProcessSnapshot` Type
+
+`simulateProcesses` and `aggregateMetrics` work with strongly-typed process objects:
+
+```typescript
+export interface WasmProcessSnapshot {
+  id: number;
+  name: string;
+  pid: number;
+  cpu: number;    // current CPU % (0–100)
+  mem: number;    // memory in KB
+  disk: number;   // disk activity % (0–100)
+  group: string;  // process group / category label
+  rank: number;   // 0=low, 1=normal, 2=high, 3=critical
+  trend: number;  // -1=decreasing, 0=stable, 1=increasing
+}
+```
+
+## Singleton Loading Model
+
+The WASM module is loaded **once per browser session** using a module-level singleton pattern. Calling `useWasmEngine()` from multiple components does not trigger multiple fetches — all hooks share the same `wasmInstance` reference and the same load promise. Components that mount before loading completes are automatically resolved when the promise settles via a listener queue.
+
+```
+Component A mounts → loadWasm() starts (wasmLoading = true)
+Component B mounts → queued in wasmListeners[]
+Component C mounts → queued in wasmListeners[]
+              ↓
+        WASM resolves
+              ↓
+  wasmListeners fired → all hooks set isReady = true simultaneously
+```
+
+## Further Reading
+
+- See [/wasm/assemblyscript](/wasm/assemblyscript) for a guide on adding new exported functions to `assembly/index.ts` and recompiling the WASM binary.
+- See [/api/building-apps](/api/building-apps) for how to use `useWasmEngine` inside a custom application component.

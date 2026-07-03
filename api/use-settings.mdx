@@ -1,0 +1,235 @@
+---
+title: "useSettings() Hook API Reference"
+sidebarTitle: "useSettings"
+description: "Complete API reference for useSettings — access and mutate NEX OS system preferences including theme, neon overlays, wallpaper, volume, brightness, and system state."
+---
+
+`useSettings` provides read/write access to all system preferences in NEX OS — everything from display brightness and audio volume to neon overlay themes and the global OS lifecycle state. Every value is automatically persisted to `localStorage`, so preferences survive page refreshes without any additional effort on your part.
+
+## Import
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+```
+
+---
+
+## SystemState Type
+
+The `systemState` property tracks where NEX OS is in its boot and shutdown lifecycle. Use `setSystemState` to trigger animated transitions between states.
+
+```typescript
+type SystemState =
+  | 'OFF'
+  | 'BOOTING'
+  | 'UEFI'
+  | 'WINDOWS_BOOT'
+  | 'LOGIN'
+  | 'DESKTOP'
+  | 'SHUTTING_DOWN'
+  | 'RESTARTING';
+```
+
+---
+
+## State Properties
+
+<ResponseField name="theme" type="'light' | 'dark'" default="'dark'">
+  The base color scheme of the OS. Controls background colors, surface tones, and text contrast across all system UI.
+</ResponseField>
+
+<ResponseField name="neonTheme" type="'none' | 'cyberpunk' | 'matrix' | 'synthwave'" default="'none'">
+  An active neon overlay applied on top of the base `theme`. Each option activates a distinct Three.js animated background and a matching CSS variable set — glow effects, scanlines, and accent color overrides.
+</ResponseField>
+
+<ResponseField name="wallpaper" type="string" default="Unsplash URL">
+  The URL of the current desktop wallpaper image. Accepts any valid absolute URL. Defaults to a curated Unsplash photo.
+</ResponseField>
+
+<ResponseField name="accentColor" type="string" default="'#60cdff'">
+  The primary accent color applied to interactive elements — buttons, focus rings, highlighted taskbar icons, and window chrome. Accepts any CSS hex color string.
+</ResponseField>
+
+<ResponseField name="brightness" type="number" default="100">
+  Screen brightness level from `0` (completely dark overlay) to `100` (no dimming). Applied as a full-viewport CSS filter.
+</ResponseField>
+
+<ResponseField name="volume" type="number" default="50">
+  System audio volume from `0` (silent) to `100` (maximum). Controls the master gain for all `playSound` calls.
+</ResponseField>
+
+<ResponseField name="isWifiEnabled" type="boolean" default="true">
+  Simulated Wi-Fi state. Shown in the system tray — does not affect actual network connectivity in the browser.
+</ResponseField>
+
+<ResponseField name="isBluetoothEnabled" type="boolean" default="true">
+  Simulated Bluetooth state. Shown in the system tray — does not affect real device pairing.
+</ResponseField>
+
+<ResponseField name="isNightLightEnabled" type="boolean" default="false">
+  When `true`, a warm-tinted blue-light filter is applied over the viewport to reduce eye strain in low-light environments.
+</ResponseField>
+
+<ResponseField name="userName" type="string" default="'Martín'">
+  The display name of the active user. Shown on the login screen, the Start Menu profile section, and anywhere the OS greets the user.
+</ResponseField>
+
+<ResponseField name="systemState" type="SystemState" default="'OFF'">
+  The current position in the OS lifecycle state machine. Drives which screen component is rendered — `OffScreen`, `BootScreen`, `UEFI`, `LoginScreen`, `Desktop`, `ShutdownScreen`, or `RestartScreen`.
+</ResponseField>
+
+<ResponseField name="osType" type="'windows' | 'nexos'" default="'windows'">
+  The active OS skin. `'windows'` renders the classic Windows-style desktop; `'nexos'` activates the alternative NEX OS shell from `src/components/nexos/`.
+</ResponseField>
+
+<ResponseField name="notifications" type="Notification[]" default="[]">
+  The live queue of system notifications. Rendered by the notification center and as toast popups via `NotificationToast.tsx`.
+</ResponseField>
+
+<ResponseField name="isTaskViewOpen" type="boolean" default="false">
+  Whether the Task View overlay (Win+Tab) is currently visible. Managed internally by the `TaskView` component but exposed here so apps can react to the overlay state.
+</ResponseField>
+
+---
+
+## Methods
+
+### setBrightness
+
+<ParamField path="value" type="number" required>
+  New brightness level between `0` and `100`. Values are clamped at the context level.
+</ParamField>
+
+---
+
+### setVolume
+
+<ParamField path="value" type="number" required>
+  New volume level between `0` and `100`. Affects the gain of all subsequent `playSound` calls.
+</ParamField>
+
+---
+
+### setAccentColor
+
+<ParamField path="color" type="string" required>
+  A valid CSS hex color string (e.g. `'#ff6ac1'`). Immediately updates the `--win-accent` CSS variable across the entire UI.
+</ParamField>
+
+---
+
+### setWallpaper
+
+<ParamField path="url" type="string" required>
+  Absolute URL of the new wallpaper image. The desktop background updates instantly.
+</ParamField>
+
+---
+
+### toggleTheme
+
+Switches `theme` between `'light'` and `'dark'`. No parameters required.
+
+---
+
+### setNeonTheme
+
+Applies a neon overlay theme that activates an animated Three.js background and matching CSS variable overrides.
+
+<ParamField path="theme" type="'none' | 'cyberpunk' | 'matrix' | 'synthwave'" required>
+  The neon theme to activate. Pass `'none'` to return to a plain background.
+</ParamField>
+
+---
+
+### lockSystem
+
+Sets `systemState` to `'LOGIN'`, returning the OS to the lock screen. No parameters required. The user must re-authenticate to return to the desktop.
+
+---
+
+### addNotification
+
+Pushes a new notification into the `notifications` queue. It appears as a toast in the bottom-right corner and is stored in the notification center.
+
+<ParamField path="title" type="string" required>
+  Short headline text displayed in bold at the top of the notification card.
+</ParamField>
+
+<ParamField path="message" type="string" required>
+  Longer body text providing notification detail.
+</ParamField>
+
+<ParamField path="icon" type="ReactNode">
+  Optional icon rendered to the left of the notification content.
+</ParamField>
+
+---
+
+### removeNotification
+
+Removes a specific notification from the `notifications` array by its unique identifier.
+
+<ParamField path="id" type="string" required>
+  The ID of the notification to dismiss.
+</ParamField>
+
+---
+
+### playSound
+
+Plays a system sound effect at the current `volume` level.
+
+<ParamField path="sound" type="'startup' | 'notif' | 'error' | 'beep'" required>
+  The sound clip to play. `'startup'` plays on boot, `'notif'` on new notifications, `'error'` on system errors, and `'beep'` as a general-purpose alert.
+</ParamField>
+
+---
+
+### setSystemState
+
+Directly transitions the OS to the specified lifecycle state. Drives the state machine in `App.tsx` that decides which top-level screen component renders.
+
+<ParamField path="state" type="SystemState" required>
+  The target system state. For example, pass `'SHUTTING_DOWN'` to trigger the shutdown animation.
+</ParamField>
+
+---
+
+## Usage Example
+
+```typescript
+import { useSettings } from '../context/SettingsContext';
+
+export const ThemeToggle = () => {
+  const { theme, toggleTheme, neonTheme, setNeonTheme, addNotification } = useSettings();
+
+  const activateCyberpunk = () => {
+    setNeonTheme('cyberpunk');
+    addNotification('Theme activated', 'Cyberpunk mode 🟣 enabled');
+  };
+
+  return (
+    <div>
+      <button onClick={toggleTheme}>
+        Switch to {theme === 'dark' ? 'Light' : 'Dark'}
+      </button>
+      <button onClick={activateCyberpunk}>Cyberpunk</button>
+    </div>
+  );
+};
+```
+
+---
+
+<Note>
+  All settings are persisted to `localStorage` automatically on every change. No manual serialization or `useEffect` save logic is required in consuming components.
+</Note>
+
+<Warning>
+  Calling `setSystemState('OFF')` renders the blank off-screen without running a proper shutdown animation. Use `setSystemState('SHUTTING_DOWN')` to trigger the full shutdown sequence, which transitions to `'OFF'` on its own.
+</Warning>
+
+<Tip>
+  Use `playSound('notif')` together with `addNotification` when delivering feedback to the user — the audio cue significantly improves the OS-native feel of your application.
+</Tip>

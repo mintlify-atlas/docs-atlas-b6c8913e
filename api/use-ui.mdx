@@ -1,0 +1,107 @@
+---
+title: "useUI() Hook API Reference"
+sidebarTitle: "useUI"
+description: "API reference for useUI — control the visibility of NEX OS system panels including the Start Menu, Widgets panel, and Desktop Switcher overlay."
+---
+
+`useUI` manages the visibility state of the floating system panels that overlay the desktop — the Start Menu, the Widgets panel, and the Desktop Switcher overlay. It is a lightweight context dedicated entirely to open/closed state, keeping panel visibility logic cleanly separated from window management and system settings.
+
+## Import
+
+```typescript
+import { useUI } from '../context/UIContext';
+```
+
+---
+
+## Properties
+
+<ResponseField name="isStartOpen" type="boolean">
+  `true` when the Start Menu panel is currently rendered and visible. Use this to style the Start button in the taskbar with an active/pressed indicator.
+</ResponseField>
+
+<ResponseField name="isWidgetsOpen" type="boolean">
+  `true` when the Widgets panel is slid into view on the left side of the screen. The Widgets panel contains `WeatherWidget`, `NewsWidget`, and `StocksWidget`.
+</ResponseField>
+
+<ResponseField name="isDesktopSwitcherOpen" type="boolean">
+  `true` when the Desktop Switcher overlay is visible. This overlay provides quick navigation between virtual desktops and is distinct from the full Task View (Win+Tab) managed through `useSettings`.
+</ResponseField>
+
+---
+
+## Methods
+
+### toggleStart
+
+Flips `isStartOpen` between `true` and `false`. Bound to the Start button in `Taskbar.tsx`. No parameters required.
+
+---
+
+### closeStart
+
+Force-closes the Start Menu by setting `isStartOpen` to `false`. Use this to dismiss the Start Menu when the user clicks outside of it or opens another panel.
+
+---
+
+### toggleWidgets
+
+Flips `isWidgetsOpen` between `true` and `false`. No parameters required.
+
+---
+
+### closeWidgets
+
+Force-closes the Widgets panel by setting `isWidgetsOpen` to `false`. No parameters required.
+
+---
+
+## Usage Example
+
+```typescript
+import { useUI } from '../context/UIContext';
+
+export const TaskbarButton = () => {
+  const { isStartOpen, toggleStart } = useUI();
+
+  return (
+    <button
+      onClick={toggleStart}
+      aria-pressed={isStartOpen}
+    >
+      Start
+    </button>
+  );
+};
+```
+
+---
+
+## Panel Overview
+
+| Panel | State property | Toggle method | Close method |
+|---|---|---|---|
+| Start Menu | `isStartOpen` | `toggleStart()` | `closeStart()` |
+| Widgets | `isWidgetsOpen` | `toggleWidgets()` | `closeWidgets()` |
+| Desktop Switcher | `isDesktopSwitcherOpen` | — | — |
+
+<Note>
+  `useUI` is designed exclusively for **system panel visibility** — it has no knowledge of windows or applications. For opening, closing, minimizing, or focusing app windows, use [`useWindowManager`](/api/use-window-manager) instead.
+</Note>
+
+<Tip>
+  When the user opens the Start Menu, close any other open panels first for a clean UX. For example, call `closeWidgets()` inside the same handler that calls `toggleStart()` to ensure only one system panel is open at a time.
+
+  ```typescript
+  const { toggleStart, closeWidgets } = useUI();
+
+  const handleStartClick = () => {
+    closeWidgets();
+    toggleStart();
+  };
+  ```
+</Tip>
+
+<Note>
+  `useUI` must be called inside a component that is a descendant of `UIProvider`. Calling it outside the provider tree will throw a context error.
+</Note>

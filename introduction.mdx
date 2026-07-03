@@ -1,0 +1,102 @@
+---
+title: "NEX OS: A Full Desktop OS Running in Your Browser"
+sidebarTitle: "Introduction"
+description: "NEX OS is a browser-based operating system built with React 19, TypeScript, WASM, and Three.js — featuring 20+ apps, virtual file system, and neon themes."
+---
+
+NEX OS is a next-generation computing experience built entirely for the web. It is not a UI clone or a cosmetic imitation — it is a fully engineered operating system ecosystem that runs inside any modern browser. Built on React 19, TypeScript, AssemblyScript (WASM), and Three.js, NEX OS delivers a complete OS lifecycle from UEFI boot through login to a fully interactive desktop, complete with a virtual file system, a multi-window manager, neon visual themes, and over 20 built-in applications — all without installing a single native binary.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone the repo, install dependencies, and boot NEX OS locally in under five minutes.
+  </Card>
+  <Card title="Architecture Overview" icon="sitemap" href="/architecture/overview">
+    Deep dive into the provider tree, OS state machine, and micro-frontend model.
+  </Card>
+  <Card title="Apps Overview" icon="grid-2" href="/apps/overview">
+    Explore all 24 built-in applications — from NexBrowser Pro to the WASM Task Manager.
+  </Card>
+  <Card title="useWindowManager API" icon="code" href="/api/use-window-manager">
+    Full reference for the central window lifecycle hook used across every app.
+  </Card>
+</CardGroup>
+
+## What Makes NEX OS Different
+
+Most browser-based "desktop" projects render a static layout with draggable boxes. NEX OS goes several layers deeper. Every application runs in its own isolated context under a central `WindowManagerProvider` orchestrator — a micro-frontend architecture where windows carry their own state, z-index memory, snap position, and saved size across minimize/restore cycles. The OS itself runs through a deterministic state machine (`OFF → BOOTING → WINDOWS_BOOT → LOGIN → DESKTOP → SHUTTING_DOWN → RESTARTING`) rendered entirely in React, with each phase producing a distinct visual screen.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Window Manager" icon="window">
+    Full window lifecycle: open, close, minimize, maximize, snap to halves and quadrants (Windows 11 style), multi-desktop virtual workspaces, and keyboard shortcuts (`Win+D`, `Win+Tab`, `Alt+F4`).
+  </Card>
+  <Card title="Virtual File System" icon="folder-open">
+    In-memory file system managed by `FileSystemContext` — create, read, update, and delete files and folders recursively, with drag-and-drop support in File Explorer and `.nex` executable support.
+  </Card>
+  <Card title="NEX Runtime" icon="terminal">
+    An interactive simulated runtime engine that lets you install virtual packages, run scripts, and execute virtual `.nex` binaries from the integrated CMD and Bash terminals.
+  </Card>
+  <Card title="WASM Performance Layer" icon="bolt">
+    Performance-critical logic (Task Manager CPU/RAM monitoring) is compiled from AssemblyScript to WebAssembly via `assembly/index.ts`, with a JavaScript fallback managed by the `useWasmEngine` hook.
+  </Card>
+  <Card title="Neon Themes" icon="palette">
+    Three dynamic neon visual themes — **Cyberpunk**, **Matrix**, and **Synthwave** — each with reactive 3D backgrounds powered by Three.js / `@react-three/fiber` that respond to the selected theme in real time.
+  </Card>
+  <Card title="PWA Support" icon="mobile">
+    Installable as a native-like app on any device via `vite-plugin-pwa`, with offline resource caching and full PWA manifest support baked into the production build.
+  </Card>
+  <Card title="Complete OS Lifecycle" icon="power-off">
+    Experience the full boot sequence: UEFI OS selector → POST/BIOS animation → Windows boot splash → Login screen → Desktop → Suspend → Shutdown → Restart — all rendered in-browser.
+  </Card>
+  <Card title="24+ Built-in Applications" icon="apps">
+    From a full-featured Notepad 2.0 and Paint canvas to a Spotify-style music player, VS Code editor, NexBrowser Pro, and a real-time WASM-powered Task Manager.
+  </Card>
+</CardGroup>
+
+## Tech Stack
+
+NEX OS is assembled from a carefully chosen set of modern web technologies, each serving a specific engineering purpose.
+
+| Technology | Version | Purpose |
+| :--- | :--- | :--- |
+| **React** | 19.x | Base UI library with concurrent rendering |
+| **TypeScript** | ~5.9 | Strict typing across the entire codebase |
+| **Vite** | 8.x | Next-generation bundler with instant HMR |
+| **Tailwind CSS** | 3.x | Utility-first styling and design tokens |
+| **Framer Motion** | 12.x | Fluid animations and window transitions |
+| **Three.js / R3F** | 0.183 | GPU-accelerated 3D dynamic backgrounds |
+| **AssemblyScript** | 0.28 | Compiles to WASM for intensive computation |
+| **Rust** | — | Secondary WASM engine (`wasm-engine/`) for system utilities |
+| **@fluentui/react-icons** | 2.x | Fluent Design system iconography |
+| **vite-plugin-pwa** | 1.x | PWA manifest, service worker, and offline cache |
+
+## System Architecture at a Glance
+
+The entire application is rooted in a layered provider tree defined in `App.tsx`. Context providers are nested in a strict order so that inner providers can consume the state of outer ones.
+
+```
+App.tsx
+├── SettingsProvider        ← User preferences (theme, volume, wallpaper…)
+│   └── MusicPlayerProvider
+│       └── FileSystemProvider      ← Virtual file system
+│           └── NexRuntimeProvider  ← NEX package runtime
+│               └── DesktopProvider ← Desktop icons + virtual desktops
+│                   └── UIProvider  ← Start Menu, Widgets, Switcher visibility
+│                       └── WindowManagerProvider  ← Window lifecycle core
+│                           └── AppContent  ← OS state machine
+│                               ├── OffScreen / BootScreen / WindowsBoot / UEFI
+│                               ├── LoginScreen
+│                               └── Desktop (Windows) | NexDesktop (NEX OS)
+│                                   ├── Background3D
+│                                   ├── Window × N
+│                                   ├── Taskbar
+│                                   ├── StartMenu
+│                                   └── Overlays (ContextMenu, TaskView, Widgets…)
+```
+
+Data flows unidirectionally: user interactions trigger component event handlers, which call context hooks (`useWindowManager`, `useSettings`, etc.), which update context state and cause targeted re-renders.
+
+<Note>
+  NEX OS is a technical demonstration of modern frontend engineering capabilities. It is not affiliated with, endorsed by, or connected to Microsoft Corporation or Spotify AB in any way. All simulated product interfaces are for illustrative purposes only.
+</Note>

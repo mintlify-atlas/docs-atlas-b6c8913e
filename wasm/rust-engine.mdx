@@ -1,0 +1,173 @@
+---
+title: "Rust WASM Engine: Systems-Level Performance for NEX OS"
+sidebarTitle: "Rust Engine"
+description: "NEX OS includes a Rust-compiled WebAssembly engine in wasm-engine/src/lib.rs for system calculations, C++ transpilation, and process management operations."
+---
+
+Alongside the AssemblyScript module, NEX OS ships a full Rust WebAssembly engine in `wasm-engine/` that handles operations too complex for AssemblyScript's constrained type system. Rust brings the full power of a systems programming language to the browser: ownership semantics, zero-cost abstractions, rich trait implementations, and access to the entire Rust crate ecosystem — all compiled down to a compact `.wasm` binary. Where AssemblyScript is the right tool for simple numeric functions, the Rust engine is deployed wherever the logic demands it.
+
+---
+
+## Directory Structure
+
+```
+wasm-engine/
+├── src/
+│   └── lib.rs      # WASM module: metrics, processes, C++ transpiler
+├── Cargo.toml      # Rust project configuration and dependencies
+└── Cargo.lock      # Deterministic dependency lock file
+```
+
+<Note>
+  The compiled output of the Rust engine is committed to the repository as `public/process_utils.wasm`. You only need to recompile if you modify `wasm-engine/src/lib.rs`. See the [Recompilation](#recompilation) section below.
+</Note>
+
+---
+
+## What the Rust Engine Powers
+
+The Rust WASM module backs three distinct capabilities inside NEX OS:
+
+<CardGroup cols={3}>
+  <Card title="System Load Calculations" icon="microchip">
+    High-frequency CPU and memory metric calculations for the Task Manager, running at native speed without saturating the JS thread.
+  </Card>
+  <Card title="C++ Transpiler" icon="code">
+    The **Dev-C++ 2026** application's `cppEngine.ts` utility calls into the Rust WASM module to parse and transpile C++ source code inside the browser.
+  </Card>
+  <Card title="Process Management" icon="list-tree">
+    Operations over the simulated process table — sorting, filtering, and aggregating process telemetry data for the Task Manager's process list.
+  </Card>
+</CardGroup>
+
+---
+
+## Rust vs. AssemblyScript: Choosing the Right Engine
+
+Both engines compile to WebAssembly and live behind the same `useWasmEngine` hook interface, but they serve different authoring and capability needs.
+
+| Concern | AssemblyScript | Rust |
+|---|---|---|
+| **Syntax** | TypeScript-like | Rust (ownership, lifetimes, traits) |
+| **Learning curve** | Low for TypeScript devs | Higher — requires Rust knowledge |
+| **Type system** | Strict numeric types only | Full type system, generics, traits |
+| **Complex algorithms** | Possible but limited | Idiomatic and well-supported |
+| **Crate ecosystem** | None | Full `crates.io` access |
+| **Build toolchain** | `asc` (npm script) | `wasm-pack` or `cargo` |
+| **Best for** | Simple numeric functions | Complex business logic, parsers, transpilers |
+
+<Tip>
+  If you are adding a new numeric utility (e.g., a new load formula or a threshold counter), prefer AssemblyScript — it compiles with a single `npm run build:as` command. Reserve the Rust engine for operations that need complex data structures, string manipulation, or Rust crates.
+</Tip>
+
+---
+
+## Integration: The `cppEngine.ts` Bridge
+
+The **Dev-C++ 2026** app (`src/components/apps/DevCpp2026.tsx`) exposes a full in-browser C++ IDE. When a user compiles code, the frontend delegates the parsing and transpilation work to the Rust WASM engine through the `cppEngine.ts` utility at `src/utils/cppEngine.ts`.
+
+This utility acts as the bridge between the React component layer and the Rust binary:
+
+1. **The IDE component** calls `cppEngine.ts` with the raw C++ source string.
+2. **`cppEngine.ts`** loads the Rust WASM binary (same `public/process_utils.wasm` served by the static file server) and invokes the exported Rust function.
+3. **The Rust function** in `lib.rs` processes the C++ source and returns the result.
+4. **`cppEngine.ts`** passes the output back to the IDE for display.
+
+This pattern keeps the React component clean and the heavy parsing logic isolated inside the Rust module, where it runs at full native speed.
+
+---
+
+## Recompilation
+
+The Rust WASM module requires a different toolchain from the AssemblyScript module. You will need `wasm-pack` installed, or you can use the lower-level `cargo` command directly.
+
+### Option 1: `wasm-pack` (Recommended)
+
+`wasm-pack` produces optimized, browser-ready output with JavaScript bindings automatically generated:
+
+```bash
+# Install wasm-pack once
+cargo install wasm-pack
+
+# Build the Rust WASM module
+cd wasm-engine
+wasm-pack build --target web --out-dir ../public
+```
+
+### Option 2: `cargo` directly
+
+For more control over the output format, build directly with `cargo`:
+
+```bash
+cd wasm-engine
+cargo build --target wasm32-unknown-unknown --release
+```
+
+<Warning>
+  The Rust toolchain requires the `wasm32-unknown-unknown` target. Install it with:
+
+  ```bash
+  rustup target add wasm32-unknown-unknown
+  ```
+
+  Without this target, `cargo build` will fail with a linker error.
+</Warning>
+
+---
+
+## The Pre-Compiled Binary
+
+The `public/process_utils.wasm` file committed to the repository is a pre-compiled binary that works out of the box — no Rust toolchain required for day-to-day development. It is loaded by the `wasmLoader` utility at startup:
+
+```typescript
+// src/utils/wasmLoader.ts
+export async function initWasm() {
+  const response = await fetch('/process_utils.wasm');
+  const buffer = await response.arrayBuffer();
+  const result = await WebAssembly.instantiate(buffer);
+  return result.instance.exports;
+}
+```
+
+Both the AssemblyScript and Rust engines share this same file path. The `asconfig.json` `outFile` and the Rust build output both target `public/process_utils.wasm`, so whichever engine was most recently compiled is the one in the binary. In the committed state, the Rust engine is active.
+
+<Note>
+  If you run `npm run build:as` after a Rust build, the AssemblyScript compiler will overwrite `public/process_utils.wasm` with the AssemblyScript binary. Rebuild with Rust (`wasm-pack`) to restore the full engine.
+</Note>
+
+---
+
+## Project Structure in Context
+
+The Rust engine is one of two WebAssembly layers in the NEX OS codebase. Here is where it fits relative to the full project:
+
+```
+windows/
+├── assembly/
+│   └── index.ts              # AssemblyScript source (TypeScript-like)
+├── wasm-engine/
+│   ├── src/
+│   │   └── lib.rs            # Rust WASM source
+│   ├── Cargo.toml            # Rust manifest
+│   └── Cargo.lock            # Locked dependencies
+├── public/
+│   └── process_utils.wasm    # Pre-compiled binary (served statically)
+└── src/
+    └── utils/
+        ├── wasmLoader.ts     # Fetches and instantiates the binary
+        ├── useWasmEngine.ts  # React hook with JS fallback
+        └── cppEngine.ts      # Bridge for Dev-C++ 2026 → Rust WASM
+```
+
+---
+
+## Further Reading
+
+<CardGroup cols={2}>
+  <Card title="WASM Overview" icon="circle-info" href="/wasm/overview">
+    Understand why NEX OS uses WebAssembly, see the performance numbers, and learn about the `useWasmEngine` hook.
+  </Card>
+  <Card title="AssemblyScript Module" icon="code" href="/wasm/assemblyscript">
+    Write TypeScript-like WASM functions, run the build pipeline, and integrate with React components.
+  </Card>
+</CardGroup>

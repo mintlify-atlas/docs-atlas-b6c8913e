@@ -1,0 +1,161 @@
+---
+title: "WindowManager: The OS Kernel for Window Lifecycle"
+sidebarTitle: "Window Manager"
+description: "How NEX OS WindowManagerContext manages window state, z-index layering, snap layouts, virtual desktops, and inter-window focus — the core kernel of the system."
+---
+
+`WindowManagerContext` is the heart of NEX OS. It acts as the operating system kernel, owning the complete lifecycle of every application window: opening, closing, minimising, maximising, snapping, focusing, and restoring. Just as a traditional OS kernel arbitrates access to system resources, `WindowManagerContext` arbitrates the screen — deciding which window is on top, how much space it occupies, and which virtual desktop it belongs to. Every component that interacts with windows does so exclusively through the `useWindowManager()` hook; nothing writes directly to window state.
+
+## The `AppWindow` Interface
+
+Every open or minimised application is represented as an `AppWindow` object in the manager's state array. The interface captures the full visual and logical state of a window at any point in time:
+
+```typescript
+interface AppWindow {
+  id: string;
+  title: string;
+  icon: ReactNode;
+  content: ReactNode;
+  desktopId: string;
+  isOpen: boolean;
+  isMinimized: boolean;
+  isMaximized: boolean;
+  snap?: 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'none';
+  zIndex: number;
+  /** Size and position saved before maximising — enables precise restore */
+  savedSize?: { width: number; height: number; x: number; y: number };
+}
+```
+
+The `savedSize` field is particularly important: when a window is maximised, its current `width`, `height`, `x`, and `y` are stored here. On restore, the `Window` component reads `savedSize` in a `useEffect` and snaps back to the exact pixel position the user had before — no jarring layout shift.
+
+## Methods Reference
+
+`useWindowManager()` exposes the following methods. All state changes are handled immutably inside the context; components never mutate the `windows` array directly.
+
+| Method | Parameters | Description |
+| :--- | :--- | :--- |
+| `openWindow` | `id, title, icon, content` | Opens a new window. If a window with that `id` already exists, restores it and brings it to the front instead of creating a duplicate. |
+| `closeWindow` | `id` | Removes the window from state entirely. The component unmounts and any internal React state is lost. |
+| `minimizeWindow` | `id` | Sets `isMinimized: true`. The `Window` component animates to scale 0.7 and opacity 0, and `pointerEvents` are disabled so the window cannot receive input. |
+| `minimizeAllWindows` | — | Minimises every open window simultaneously. Bound to the `Win+D` shortcut. |
+| `maximizeWindow` | `id, currentSize?` | Toggles maximised state. Pass the current `{ width, height, x, y }` so the manager can persist it in `savedSize` for later restore. |
+| `restoreWindow` | `id` | Restores a minimised window **without reinitialising its content**. Unlike `openWindow`, this does not remount the app component — internal state such as text editor content or scroll position is fully preserved. |
+| `snapWindow` | `id, direction` | Applies a snap position. Valid directions: `'left'`, `'right'`, `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'`, `'none'`. |
+| `focusWindow` | `id` | Increments the window's `zIndex` to bring it above all others and sets it as the `focusedWindowId`. |
+| `closeFocusedWindow` | — | Closes whichever window currently has focus. Bound to the `Alt+F4` shortcut. |
+
+### Properties
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `windows` | `AppWindow[]` | The live array of all open and minimised windows across all virtual desktops. |
+| `focusedWindowId` | `string \| null` | The `id` of the currently active window, or `null` if no window is focused. |
+
+## The `Window` HOC
+
+Every application in NEX OS is wrapped in the `Window` component (`src/components/Window.tsx`), which acts as a Higher-Order Component providing all window-chrome behaviour. The app component itself — `Notepad`, `FileExplorer`, `Terminal`, etc. — has no knowledge of dragging, resizing, or snapping. It simply renders its UI; the `Window` HOC handles everything else.
+
+```
+Window (HOC)
+├── Drag — mouse-down on window-header triggers position tracking
+├── Resize — 8 resize handles (n, s, e, w, ne, nw, se, sw)
+├── Snap preview — ghost overlay rendered during drag to screen edges
+├── Window controls — Minimise / Maximise / Close buttons (Fluent icons)
+├── Snap layout menu — hover the maximise button to reveal a 4-layout grid
+├── Backdrop blur — glassmorphism effect via CSS backdrop-filter
+├── Focus ring — accent-coloured border and elevated shadow when focused
+├── Framer Motion — spring-animated open/close/minimise transitions
+└── ErrorBoundary — catches app-level crashes without taking down the OS
+```
+
+The `Window` component is exported as `React.memo(Window)`. This is a deliberate performance decision: z-index updates and focus changes re-render `WindowManagerContext`, but because each `Window` only receives its own `AppWindow` object as a prop, only the window that actually changed will re-render. All other windows stay frozen.
+
+<Note>
+  On mobile viewports (width &lt; 640 px), the `Window` component automatically calls `maximizeWindow` on mount and hides the resize handles, giving mobile users a full-screen app experience identical to a native mobile OS.
+</Note>
+
+## Snap Layouts
+
+NEX OS implements six snap positions that divide the screen real estate into halves and quadrants. Snapping can be triggered three ways: dragging a window to a screen edge, clicking the directional snap buttons in the window header, or hovering the maximise button and choosing from the snap layouts menu.
+
+| Snap Position | Area Occupied |
+| :--- | :--- |
+| `left` | Left 50% of screen height (full height) |
+| `right` | Right 50% of screen height (full height) |
+| `top-left` | Top-left quadrant (50% width × 50% height) |
+| `top-right` | Top-right quadrant (50% width × 50% height) |
+| `bottom-left` | Bottom-left quadrant (50% width × 50% height) |
+| `bottom-right` | Bottom-right quadrant (50% width × 50% height) |
+
+When a window is snapped, the `Window` component's Framer Motion `animate` prop maps each snap value to the corresponding CSS dimensions using `calc()` expressions relative to `100vw` and `calc(100vh - var(--taskbar-height))`. The `savedSize` field means that when the user clears the snap (by dragging the window away from the edge), it restores to its exact pre-snap size and position rather than reverting to a default.
+
+<Tip>
+  Drag any window to the very top edge of the screen (within 5 px) to trigger a **full-screen maximise** snap preview. Release to maximise.
+</Tip>
+
+## Virtual Desktops
+
+Each `AppWindow` carries a `desktopId` string that identifies which virtual desktop it belongs to. The `DesktopContext` (via `useDesktop()`) manages the active desktop and exposes `switchDesktop(desktopId)` to change the current view.
+
+Windows on inactive desktops remain mounted in the React tree — their state is preserved — but they are filtered out of the rendered window stack so they are invisible. This mirrors how Windows 11 Task View works: switching desktops is instant because no unmounting occurs.
+
+| Action | Keyboard Shortcut |
+| :--- | :--- |
+| Switch to previous virtual desktop | `Win + Ctrl + ←` |
+| Switch to next virtual desktop | `Win + Ctrl + →` |
+| Open Task View | `Win + Tab` |
+| Add new virtual desktop | `Win + Ctrl + D` |
+
+## Launching a Window with Restore Logic
+
+The recommended pattern for any launcher — a Taskbar button, a Start Menu entry, or a `.nex` binary — is to check whether the window already exists before calling `openWindow`. Using `restoreWindow` instead of re-calling `openWindow` ensures the application's internal React state (for example, an unsaved document in Notepad) is not discarded.
+
+```typescript
+import { useWindowManager } from '../context/WindowManager';
+import MyApp from './apps/MyApp';
+
+export const LauncherButton = () => {
+  const { openWindow, restoreWindow, windows } = useWindowManager();
+
+  const handleClick = () => {
+    const existing = windows.find(w => w.id === 'my-app');
+
+    if (existing?.isMinimized) {
+      // ✅ Brings the window back without remounting the app component
+      restoreWindow('my-app');
+    } else {
+      // First launch — create the window fresh
+      openWindow('my-app', 'My App', <span>🚀</span>, <MyApp />);
+    }
+  };
+
+  return <button onClick={handleClick}>Open My App</button>;
+};
+```
+
+<Tip>
+  Always prefer `restoreWindow` over `openWindow` for windows that may already exist. Calling `openWindow` on an existing `id` will restore it, but the idiomatic pattern shown above gives you explicit control and makes intent clear at the call site.
+</Tip>
+
+## Correctly Passing `savedSize` on Maximise
+
+When calling `maximizeWindow` programmatically — for example from a keyboard shortcut handler — pass the window's current size and position so the manager can store them in `savedSize`. Without this, the window cannot restore to its pre-maximised dimensions.
+
+```typescript
+const { maximizeWindow } = useWindowManager();
+
+// Pass the current geometry so it can be saved for precise restore
+const handleMaximize = () => {
+  maximizeWindow(windowId, {
+    width: size.width,
+    height: size.height,
+    x: position.x,
+    y: position.y,
+  });
+};
+```
+
+<Warning>
+  Calling `maximizeWindow(id)` without the `currentSize` argument will still toggle maximised state, but `savedSize` will be undefined. When the user un-maximises, the window will revert to its React-local size state rather than the position they last placed it.
+</Warning>

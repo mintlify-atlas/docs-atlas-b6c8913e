@@ -1,0 +1,329 @@
+---
+title: "AssemblyScript WASM Module: Writing and Compiling"
+sidebarTitle: "AssemblyScript"
+description: "How to write, compile, and consume AssemblyScript WebAssembly modules in NEX OS. Covers exported functions, TypeScript types, React integration, and debugging."
+---
+
+AssemblyScript lets you write TypeScript-like code that compiles directly to WebAssembly — no Rust knowledge required. In NEX OS, the exported functions in `assembly/index.ts` power the Task Manager's real-time CPU and memory metrics, running calculations at near-native speed while the React UI stays completely responsive. If you already know TypeScript, you can start writing WASM functions immediately.
+
+---
+
+## Exported Functions
+
+The `assembly/index.ts` file is the sole source of truth for the AssemblyScript module. The following functions are exported and available to React components through the `useWasmEngine` hook and the `wasmLoader` utility.
+
+```typescript
+// assembly/index.ts
+
+export function calculateLoad(cpu: f64, mem: f64): f64 {
+  // A simple formula to calculate "System Impact"
+  // This runs in WASM for peak performance during rapid updates
+  return (cpu * 0.7) + (mem * 0.3);
+}
+
+export function getRank(load: f64): i32 {
+  if (load > 80) return 3; // Critical
+  if (load > 40) return 2; // High
+  if (load > 10) return 1; // Normal
+  return 0;                // Low
+}
+```
+
+These are the canonical functions from the real source. The `WASM_BRIDGE.md` documentation also demonstrates additional batch-processing patterns:
+
+```typescript
+// assembly/index.ts
+
+// Calculates the weighted average of a metric dataset
+export function processMetrics(data: Float64Array): f64 {
+  let sum: f64 = 0;
+  let count: i32 = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum += data[i];
+    count++;
+  }
+  return count > 0 ? sum / f64(count) : 0;
+}
+
+// Counts samples that exceed a performance threshold
+export function analyzePerformance(samples: Float64Array, threshold: f64): i32 {
+  let problematicCount: i32 = 0;
+  for (let i = 0; i < samples.length; i++) {
+    if (samples[i] > threshold) problematicCount++;
+  }
+  return problematicCount;
+}
+
+// Normalizes an audio buffer in place (used by the Media Player)
+export function normalizeAudio(samples: Float64Array): void {
+  let max: f64 = 0;
+  for (let i = 0; i < samples.length; i++) {
+    let abs = samples[i] > 0 ? samples[i] : -samples[i];
+    if (abs > max) max = abs;
+  }
+  if (max > 0) {
+    for (let i = 0; i < samples.length; i++) {
+      samples[i] = samples[i] / max;
+    }
+  }
+}
+```
+
+---
+
+## AssemblyScript Type System
+
+AssemblyScript is a strict subset of TypeScript with explicit numeric types. These map directly to WebAssembly value types, which is what makes the compilation possible and why the performance is so high.
+
+| Category | Types | Notes |
+|---|---|---|
+| **Signed integers** | `i8`, `i16`, `i32`, `i64` | `i32` is the default integer type |
+| **Unsigned integers** | `u8`, `u16`, `u32`, `u64` | Use for counts and indices |
+| **Floats** | `f32`, `f64` | `f64` matches JavaScript `number` |
+| **Arrays** | `Float64Array`, `i32[]` | Typed arrays cross the WASM boundary |
+| **Strings** | `string` | Limited support — avoid for exported functions |
+
+<Tip>
+  Prefer `i32` for counters and ranks, and `f64` for percentages and load values. `f64` has the same precision as a JavaScript `number`, so results stay numerically consistent on both sides of the bridge.
+</Tip>
+
+---
+
+## Compilation Workflow
+
+<Steps>
+  <Step title="Edit assembly/index.ts">
+    Open `assembly/index.ts` and add or modify exported functions. Use AssemblyScript types (`f64`, `i32`, `Float64Array`) for all parameters and return values.
+
+    ```typescript
+    // assembly/index.ts
+    export function calculateSystemLoad(cpu: f64, mem: f64): f64 {
+      return (cpu * 0.7) + (mem * 0.3);
+    }
+    ```
+  </Step>
+  <Step title="Run the build command">
+    Compile the AssemblyScript source to WebAssembly using the project's npm script:
+
+    ```bash
+    npm run build:as
+    ```
+
+    This internally calls `asc assembly/index.ts --target release` using the configuration in `asconfig.json`.
+  </Step>
+  <Step title="Verify the output files">
+    After a successful build, two files are updated in `public/`:
+
+    ```
+    public/
+    ├── process_utils.wasm   ← Compiled WebAssembly binary
+    └── process_utils.js     ← ESM wrapper with TypeScript bindings
+    ```
+  </Step>
+  <Step title="Test in the browser">
+    Start the dev server and open the Task Manager application. The `useWasmEngine` hook will automatically load the new binary. Use the `isWasm` flag to confirm WASM is active.
+
+    ```bash
+    npm run dev
+    ```
+  </Step>
+</Steps>
+
+---
+
+## `asconfig.json` Configuration
+
+The `asconfig.json` file at the project root controls how AssemblyScript compiles the module. NEX OS ships with the following configuration:
+
+```json
+{
+  "targets": {
+    "debug": {
+      "outFile": "public/process_utils.wasm",
+      "sourceMap": true,
+      "debug": true
+    },
+    "release": {
+      "outFile": "public/process_utils.wasm",
+      "sourceMap": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 0,
+      "converge": false,
+      "noAssert": false
+    }
+  },
+  "options": {
+    "bindings": "esm"
+  }
+}
+```
+
+| Key | Value | Effect |
+|---|---|---|
+| `outFile` | `public/process_utils.wasm` | Where the binary is written |
+| `optimizeLevel` | `3` | Maximum LLVM-level optimizations |
+| `shrinkLevel` | `0` | Preserves debug info in release builds |
+| `sourceMap` | `true` | Enables source-mapped debugging in DevTools |
+| `bindings` | `"esm"` | Emits an ES module wrapper for easy import |
+
+<Note>
+  The pre-compiled `public/process_utils.wasm` is committed to the repository. You only need to run `npm run build:as` if you modify `assembly/index.ts`.
+</Note>
+
+---
+
+## Consuming the Module in React
+
+### The `wasmLoader` Utility
+
+The low-level loader in `src/utils/wasmLoader.ts` fetches and instantiates the binary once, then caches the result for all subsequent calls:
+
+```typescript
+// src/utils/wasmLoader.ts
+let wasmModule: any = null;
+
+export async function initWasm() {
+  const response = await fetch('/process_utils.wasm');
+  const buffer = await response.arrayBuffer();
+  const result = await WebAssembly.instantiate(buffer);
+  return result.instance.exports;
+}
+
+export async function getWasm() {
+  if (!wasmModule) wasmModule = await initWasm();
+  return wasmModule;
+}
+```
+
+### The `useWasmEngine` Hook (Recommended)
+
+For React components, the `useWasmEngine` hook at `src/utils/useWasmEngine.ts` is the preferred integration point. It wraps `wasmLoader`, manages loading state, and provides a transparent JavaScript fallback:
+
+```typescript
+import { useWasmEngine } from '../utils/useWasmEngine';
+
+export const TaskManager: React.FC = () => {
+  const { isReady, isWasm, calculateLoad, getRank } = useWasmEngine();
+
+  if (!isReady) return <div>Loading WASM engine...</div>;
+
+  const load = calculateLoad(0.7, 0.4);
+  const rank = getRank(load);
+
+  return (
+    <div>
+      <p>System Load: {load.toFixed(2)}%</p>
+      <p>Rank: {rank}</p>
+      <p>Engine: {isWasm ? 'WASM ⚡' : 'JS Fallback'}</p>
+    </div>
+  );
+};
+```
+
+---
+
+## Limitations
+
+Not all TypeScript patterns are valid in AssemblyScript. The compiler enforces strict constraints that map to WebAssembly's type system.
+
+| Pattern | Supported | Notes |
+|---|---|---|
+| `Float64Array` parameters | ✅ | Efficient cross-boundary transfer |
+| `i32` / `f64` return values | ✅ | Map directly to WASM value types |
+| Primitive types (`i32`, `f64`) | ✅ | First-class citizens |
+| Callbacks (`() => void`) | ❌ | Function references not exportable |
+| Complex return objects (`{ x, y }`) | ❌ | Structs cannot cross the JS boundary |
+| Dynamic `any` types | ❌ | AssemblyScript is strictly typed |
+
+```typescript
+// ❌ NOT supported — callbacks
+export function takesCallback(cb: () => void): void {
+  cb(); // will not compile
+}
+
+// ❌ NOT supported — object returns
+export function returnsObject(): { x: i32; y: i32 } {
+  return { x: 1, y: 2 }; // structs cannot cross the boundary
+}
+
+// ✅ Supported — typed array return
+export function returnsArray(): Float64Array {
+  return new Float64Array([1.0, 2.0, 3.0]);
+}
+
+// ✅ Supported — primitive return
+export function add(a: i32, b: i32): i32 {
+  return a + b;
+}
+```
+
+---
+
+## Performance Tips
+
+Getting the best out of WASM requires minimizing the cost of crossing the JS ↔ WASM boundary.
+
+**Batch operations — don't call WASM in a loop:**
+
+```typescript
+// ❌ Expensive: 1,000,000 WASM calls
+const results: number[] = [];
+for (let i = 0; i < 1_000_000; i++) {
+  results.push(wasm.calculateLoad(data[i], data[i + 1]));
+}
+
+// ✅ Cheap: 1 WASM call processes the whole dataset
+const results = wasm.processMetrics(new Float64Array(data));
+```
+
+**Use precise numeric types:**
+
+```typescript
+// ✅ i32 for integer counters — maps to a 32-bit int natively
+export function getRank(load: f64): i32 { ... }
+
+// ❌ Avoid f64 for values that are always integers
+export function getRank(load: f64): f64 { ... } // unnecessary precision
+```
+
+**Minimise data copying:** Pass `Float64Array` views of existing buffers rather than creating new arrays just for a WASM call.
+
+---
+
+## Debugging
+
+### Timing WASM vs JavaScript
+
+```typescript
+// src/utils/debug.ts
+import { getWasm } from './wasmLoader';
+
+export const benchmarkWasm = async () => {
+  const wasm = await getWasm();
+
+  const data = new Float64Array(1_000_000).map(() => Math.random());
+
+  console.time('WASM processMetrics');
+  const wasmResult = wasm.processMetrics(data);
+  console.timeEnd('WASM processMetrics');
+
+  console.time('JS processMetrics');
+  const jsResult = data.reduce((s, v) => s + v, 0) / data.length;
+  console.timeEnd('JS processMetrics');
+
+  console.log('WASM:', wasmResult, '| JS:', jsResult);
+  console.log('Match:', Math.abs(wasmResult - jsResult) < 0.0001);
+};
+```
+
+### Inspecting the Binary
+
+```bash
+# Convert the WASM binary to human-readable WAT format
+wasm2wat public/process_utils.wasm > public/process_utils.wat
+
+# Peek at the raw binary header
+hexdump -C public/process_utils.wasm | head
+```
+
+Chrome DevTools also renders WASM call frames in the Performance tab — record a profile while the Task Manager is open to see `calculateLoad` and `getRank` appearing as native frames in the flame chart.

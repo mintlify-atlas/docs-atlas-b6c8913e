@@ -1,0 +1,167 @@
+---
+title: "NEX Runtime: Simulated npm, pnpm, and .nex Executables"
+sidebarTitle: "NEX Runtime"
+description: "NEX Runtime is an in-memory execution engine that simulates npm and pnpm package management, process tracking, and .nex binary launching inside NEX OS terminals."
+---
+
+NEX Runtime (`NexRuntimeContext`, mounted as `NexRuntimeProvider` in `App.tsx`) is an in-memory subsystem that simulates a real package management and execution environment entirely inside the browser. When a user types `npm install react` in the NEX OS terminal, the runtime resolves dependencies, produces realistic streaming output line-by-line with authentic timing, and mutates the Virtual File System to create `package.json`, `package-lock.json`, and a `node_modules/` folder — all without touching the network or the user's actual machine. The same subsystem also powers `.nex` binary resolution and feeds process telemetry to the Task Manager.
+
+## Runtime Architecture
+
+`NexRuntimeProvider` owns four distinct internal domains that together simulate a complete execution environment:
+
+```
+NexRuntimeProvider
+ ├── packages   — installed dependency map per virtual directory path
+ ├── projects   — virtual package.json structures (name, version, scripts, dependencies)
+ ├── processes  — simulated PIDs and subprocess telemetry for Task Manager
+ └── methods    — npmRun(), pnpmRun(), resolveNex()
+```
+
+These four domains integrate with the two other major OS subsystems:
+
+```
+NexRuntime
+    │
+    ├──► WindowManagerContext   (resolveNex launches windows)
+    │
+    ├──► FileSystemContext      (install/init mutates the VFS)
+    │
+    └──► Task Manager UI        (processes feeds real-time telemetry)
+```
+
+<Note>
+  `NexRuntimeProvider` is placed above `DesktopProvider` and `WindowManagerProvider` in the provider tree so that resolved `.nex` binaries can call `openWindow` from a lower provider without creating dependency cycles.
+</Note>
+
+## npm and pnpm Command Support
+
+The runtime intercepts commands typed in `Terminal.tsx` and `Cmd.tsx` and routes them through async generator functions that yield output lines. The generators introduce realistic delays between lines — mimicking the actual latency of a package registry request — so the terminal output feels authentic rather than instant.
+
+Supported command families:
+
+| Command | Effect |
+| :--- | :--- |
+| `npm init` / `pnpm init` | Scaffolds a `package.json` in the current VFS directory with name, version, description, and an empty `scripts` block. |
+| `npm install` / `pnpm install` | Reads the `dependencies` from the directory's `package.json` and installs all listed packages, creating `node_modules/` and `package-lock.json` / `pnpm-lock.yaml`. |
+| `npm add <pkg>` / `pnpm add <pkg>` | Adds a named package to `dependencies`, updates `package.json`, and creates the corresponding entry in `node_modules/`. |
+| `npm uninstall <pkg>` / `pnpm remove <pkg>` | Removes the package from `dependencies` and deletes its folder from `node_modules/`. |
+| `npm run <script>` / `pnpm run <script>` | Looks up the script key in the project's `scripts` block and streams simulated execution output to the terminal. |
+
+### Command Processing Pipeline
+
+Every command goes through three sequential stages before output reaches the terminal:
+
+<Steps>
+  <Step title="Resolution">
+    The command string is parsed into a verb (`install`, `add`, `run`, `init`) and arguments. The runtime identifies the current virtual working directory from the terminal's path state and locates the corresponding `project` entry in `NexRuntimeContext`.
+  </Step>
+  <Step title="VFS Mutation">
+    Depending on the command, `createFile` and `updateFileContent` from `FileSystemContext` are called to write `package.json`, `package-lock.json`, and virtual `node_modules/` entries into the VFS tree. This means File Explorer will immediately show the new files if the user navigates to that directory.
+  </Step>
+  <Step title="Output Streaming">
+    The async generator yields output lines to the terminal component one at a time, each after a small `setTimeout` delay. The terminal appends each line as it arrives, producing the familiar scrolling-log effect of a real package manager.
+  </Step>
+</Steps>
+
+## `.nex` Executables
+
+`.nex` files are virtual executables stored in the VFS with a `nexPayload` JSON body. The NEX Runtime is responsible for resolving and launching them. Three entry points exist:
+
+<Steps>
+  <Step title="Double-click in File Explorer">
+    File Explorer calls `openFile(file)` from `useFileSystem()`. The context reads the `.nex` extension, parses the `nexPayload` JSON from `content`, and delegates to `WindowManagerContext.openWindow()` with the resolved app component, icon, and title.
+  </Step>
+  <Step title="Win+R Run Dialog">
+    The Run dialog calls `resolveNex(input)` from `NexRuntimeContext`. The method accepts both explicit (`notepad.nex`) and implicit (`notepad`) input, appending `.nex` automatically. It searches `C:/Program Files/NEX/` in the VFS for the matching binary, then launches the app via `openWindow`.
+
+    ```typescript
+    // Both of these resolve to the same window
+    resolveNex('notepad');       // implicit — appends .nex, searches Program Files
+    resolveNex('notepad.nex');   // explicit — same resolution path
+    ```
+  </Step>
+  <Step title="Terminal Command">
+    Typing `./vscode.nex` or `vscode.nex` in the terminal triggers the runtime's command parser. It checks the current working directory first, then falls back to `C:/Program Files/NEX/`. On match, `resolveNex` launches the window exactly as Win+R would.
+
+    ```bash
+    # From any terminal directory
+    ./vscode.nex
+    vscode.nex
+
+    # Both search cwd first, then C:/Program Files/NEX/
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Use **Win+R** for the fastest app launch. Type the app name without the `.nex` extension — `notepad`, `calculator`, `vscode` — and press Enter. `resolveNex` handles the implicit resolution in milliseconds.
+</Tip>
+
+## Process Lifecycle and Task Manager Integration
+
+Every command the runtime executes — whether a package installation or a `.nex` binary launch — creates a simulated process entry in the `processes` map. Each entry carries:
+
+| Field | Description |
+| :--- | :--- |
+| `pid` | A simulated integer process ID, auto-incremented per session |
+| `name` | Human-readable process name (e.g., `npm install`, `vscode.nex`) |
+| `cpuUsage` | Simulated CPU percentage — spikes during install, idles after completion |
+| `memUsage` | Simulated memory footprint in MB |
+| `status` | `'running'` \| `'sleeping'` \| `'zombie'` |
+| `startTime` | Timestamp of process creation |
+
+The **Task Manager** application reads directly from `NexRuntimeContext.processes` to display the live process list. CPU and memory readings for runtime processes are synthetic — but the underlying OS-level metrics shown in the Performance tab come from real hardware telemetry via the WASM bridge, giving the Task Manager a hybrid of real and simulated data.
+
+```typescript
+// Task Manager reading from the runtime
+import { useNexRuntime } from '../../context/NexRuntimeContext';
+
+const ProcessList = () => {
+  const { processes } = useNexRuntime();
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>PID</th>
+          <th>Name</th>
+          <th>CPU</th>
+          <th>Memory</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {processes.map(proc => (
+          <tr key={proc.pid}>
+            <td>{proc.pid}</td>
+            <td>{proc.name}</td>
+            <td>{proc.cpuUsage.toFixed(1)}%</td>
+            <td>{proc.memUsage} MB</td>
+            <td>{proc.status}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+```
+
+## VFS Mutations from Package Commands
+
+When `npm install` completes, the VFS reflects the result immediately. A user who opens File Explorer and navigates to the project directory will see the following structure created by the runtime:
+
+```
+my-project/
+├── package.json          — name, version, scripts, dependencies
+├── package-lock.json     — resolved dependency tree snapshot
+└── node_modules/
+    └── <package-name>/   — one virtual folder per installed package
+        └── package.json  — minimal package manifest
+```
+
+All of these files are created via `FileSystemContext.createFile()` and `updateFileContent()`, so they are fully readable and editable by any other NEX OS application. Notepad can open `package.json`, the VS Code app can display it in its tree, and a subsequent `npm install` will read it back to resolve additional dependencies.
+
+<Warning>
+  Installed packages exist only in the VFS for the duration of the browser session. Refreshing the page clears all runtime state. NEX Runtime does not persist `node_modules/` to `localStorage` — only `SettingsContext` persists data between sessions.
+</Warning>
